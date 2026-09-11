@@ -80,3 +80,22 @@ function beginEdit(id){state.editId=id;render()}function cancelEdit(){state.edit
 async function toData(file){return new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file)})}
 async function saveProduct(event){event.preventDefault();const form=event.currentTarget,editing=state.editId?state.products.find(p=>p.id===state.editId):null,main=form.main_photo.files[0],detail=form.detail_photo.files[0];if(!editing&&(!main||!detail)){alert('Choose both a main photo and a detail photo.');return}const input=Object.fromEntries(new FormData(form));input.sizes=[...form.querySelectorAll('input[name="sizes"]:checked')].map(x=>x.value);input.colors=[...form.querySelectorAll('input[name="colors"]:checked')].map(x=>x.value);input.mainImageData=main?await toData(main):'';input.detailImageData=detail?await toData(detail):'';input.published=form.published.checked;input.featured=form.featured.checked;if(editing){input.image_url=editing.image_url;input.detail_image_url=editing.detail_image_url||''}try{await adminFetch(editing?`/api/admin/products/${editing.id}`:'/api/admin/products',{method:editing?'PATCH':'POST',body:JSON.stringify(input)});state.editId=null;await loadAdmin();render();alert(t('saved'))}catch(error){if(error.message!=='Cancelled')alert(error.message)}}
 function add(id){const product=state.products.find(p=>p.id===id),sizes=product?.category==='clothes'&&Array.isArray(product?.sizes)?product.sizes:[],colors=Array.isArray(product?.colors)?product.colors:[],size=selectedOption(id,'size'),color=selectedOption(id,'color');if(sizes.length&&!size){alert(t('chooseSize'));return}if(colors.length&&!color){alert(t('chooseColor'));return}const item=state.cart.find(x=>x.id===id&&(x.size||'')===size&&(x.color||'')===color);item?item.qty++:state.cart.push({id,size,color,qty:1});save();render()}
+
+copy.en.paymentQr='Payment QR';copy.en.scanToPay='Scan this QR code to pay. Please keep your order number.';copy.en.orderNumber='Order number';
+copy.km.paymentQr='QR កូដបង់ប្រាក់';copy.km.scanToPay='ស្កេន QR កូដនេះដើម្បីបង់ប្រាក់។ សូមរក្សាលេខបញ្ជាទិញរបស់អ្នក។';copy.km.orderNumber='លេខបញ្ជាទិញ';
+function paymentPage(){const payment=state.paymentOrder;if(!payment){showShop();return ''}return `<section class="panel payment-page"><button class="back" onclick="showShop()">${t('continue')}</button><h2>${t('paymentQr')}</h2><p><b>${t('orderNumber')}:</b> ${payment.order_number}</p><img class="payment-qr" src="${payment.qr}" alt="${t('paymentQr')}"><p class="payment-note">${t('scanToPay')}</p></section>`}
+function render(){$('#app').innerHTML=`<main class="shell">${header()}${state.view==='shop'?shop():state.view==='cart'?cart():state.view==='detail'?productDetail():state.view==='payment'?paymentPage():admin()}<footer class="footer">${t('footer')}</footer></main>`}
+async function requestQR(){
+  const name=$('#customer-name')?.value.trim(),contact=$('#customer-contact')?.value.trim(),address=$('#customer-address')?.value.trim();
+  if(!name||!contact||(state.delivery==='delivery'&&!address)){alert('Please complete the order details. / សូមបំពេញព័ត៌មានបញ្ជាទិញ។');return}
+  const items=state.cart.map(i=>{const p=state.products.find(p=>p.id===i.id);return {name:p.name_en,size:i.size||'',color:i.color||'',quantity:i.qty,price:p.price}});
+  const subtotal=items.reduce((n,i)=>n+i.quantity*i.price,0),shipping=state.delivery==='delivery'?Number(String(state.settings.shipping[state.region]).replace('$','')):0;
+  try{
+    const response=await fetch('/api/orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({telegramInitData:window.Telegram?.WebApp?.initData||'',name,contact,address,delivery:state.delivery,region:state.region,items,subtotal,shipping,total:subtotal+shipping})});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok)throw Error(result.error||'Order request failed');
+    state.cart=[];save();
+    if(result.payment_qr_url){state.paymentOrder={order_number:result.order_number,qr:result.payment_qr_url};state.view='payment';render();return}
+    alert(t('orderSent'));showShop();
+  }catch(error){alert(error.message||t('serverError'))}
+}
