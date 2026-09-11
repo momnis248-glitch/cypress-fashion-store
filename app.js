@@ -99,3 +99,12 @@ async function requestQR(){
     alert(t('orderSent'));showShop();
   }catch(error){alert(error.message||t('serverError'))}
 }
+
+function variantKey(id,type){return `${type}:${id}`}
+function chooseOption(id,type,value){state.selectedVariants=state.selectedVariants||{};state.selectedVariants[variantKey(id,type)]=value;render()}
+function selectedOption(id,type){return state.selectedVariants?.[variantKey(id,type)]||''}
+function variantPicker(p){
+  const sizes=p.category==='clothes'&&Array.isArray(p.sizes)?p.sizes:[],colors=Array.isArray(p.colors)?p.colors:[];
+  const size=selectedOption(p.id,'size'),color=selectedOption(p.id,'color');
+  return `${sizes.length?`<div class="variant-group"><b>${t('sizes')}</b><div class="variant-options">${sizes.map(value=>`<button type="button" class="variant-chip ${size===value?'selected':''}" onclick="chooseOption('${p.id}','size','${value}')">${value}</button>`).join('')}</div></div>`:''}${colors.length?`<div class="variant-group"><b>${t('colors')}</b><div class="variant-options">${colors.map(value=>{const option=colorOption(value);return `<button type="button" class="variant-chip color-chip ${color===option.value?'selected':''}" onclick="chooseOption('${p.id}','color','${option.value}')"><span class="swatch" style="background:${option.tone}"></span><span>${colorName(value)}</span></button>`}).join('')}</div></div>`:''}`
+}

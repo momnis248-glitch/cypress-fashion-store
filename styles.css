@@ -106,6 +106,7 @@ button{cursor:pointer;border:0}
 .variant-chip{position:relative;display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 11px;font-size:13px;cursor:pointer}
 .variant-chip input,.admin-choice input{position:absolute;opacity:0;pointer-events:none}
 .variant-chip:has(input:checked),.admin-choice:has(input:checked){border-color:var(--accent);box-shadow:0 0 0 2px #f2d8ce;color:var(--accent);font-weight:700}
+.variant-chip.selected{border-color:var(--accent);box-shadow:0 0 0 2px #f2d8ce;color:var(--accent);font-weight:700}
 .swatch{width:15px;height:15px;border-radius:50%;border:1px solid #c8c0b7;display:inline-block}
 .admin-choice{position:relative;display:inline-flex;align-items:center;border:1px solid var(--line);background:#fff;border-radius:8px;padding:9px 12px;cursor:pointer;font-size:13px}
 .admin-choice-grid{margin:-4px 0 14px}
