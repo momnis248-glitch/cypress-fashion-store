@@ -116,11 +116,8 @@ button{cursor:pointer;border:0}
 .added-message{position:fixed;z-index:9999;left:50%;bottom:82px;transform:translateX(-50%);background:#225e49;color:#fff;padding:12px 18px;border-radius:100px;box-shadow:0 8px 20px rgba(0,0,0,.18);font-weight:700;white-space:nowrap}
 @media(max-width:700px){
   .shell{padding:0 12px 28px}
-  .topbar{padding:8px 0;gap:6px;align-items:center}
-  .brand{font-size:16px;max-width:92px;white-space:nowrap;overflow:hidden;line-height:1.1}
-  .brand span{display:none}
-  .top-actions{gap:4px;min-width:0}
-  .pill{padding:7px 8px;font-size:13px}
+  .topbar{height:190px;margin:0 -12px;padding:0;background:#fff;border-bottom:1px solid var(--line)}
+  .topbar .brand,.topbar .top-actions{display:none}
   .section-head{margin:22px 0 12px}
   .product-detail{padding:16px;margin-top:12px}
   .detail-info h2{font-size:30px}
