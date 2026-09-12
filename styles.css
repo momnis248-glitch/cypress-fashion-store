@@ -129,10 +129,14 @@ button{cursor:pointer;border:0}
 .customer-action{min-width:142px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px;font-weight:700;color:var(--ink);box-shadow:0 1px 0 rgba(0,0,0,.04)}
 .customer-action:active{transform:translateY(1px)}
 .admin-home{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:9px 12px;color:var(--accent)}
+.home-return{border:1px solid var(--line);border-radius:8px;background:var(--card);padding:9px 12px;color:var(--accent);margin-bottom:14px}
 .product-simple .product-body{padding-top:12px}
 .product-simple .product-title{margin:0}
 .product-promo{margin:6px 0 0;color:var(--accent);font-size:13px;font-weight:700}
 .admin-success{position:fixed;z-index:9999;left:50%;bottom:82px;transform:translateX(-50%);background:#225e49;color:#fff;padding:12px 18px;border-radius:100px;box-shadow:0 8px 20px rgba(0,0,0,.18);font-weight:700;white-space:nowrap}
+.shipping-summary{display:flex;justify-content:space-between;margin:12px 0 4px;color:var(--muted)}
+.shipping-summary strong{color:#225e49}
+.shipping-hint{display:block;color:var(--accent);margin:0 0 12px}
 @media(max-width:700px){
   .shell{padding:0 12px 28px}
   .topbar{position:relative;height:112px;margin:0 -12px;padding:0 12px;background:var(--paper);border-bottom:1px solid var(--line);justify-content:flex-end}
