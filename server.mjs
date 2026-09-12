@@ -7,6 +7,7 @@ const root = process.cwd();
 const defaults = {
   pickup: 'TG Factory #4', shipping: { 'Phnom Penh': '$2.00', 'Other provinces': '$3.50', 'Remote areas': '$5.00' }, free_shipping_threshold: 25,
   hero_en: 'A little light, for every day.', hero_km: 'សម្រស់តិចៗ សម្រាប់រាល់ថ្ងៃ។',
+  new_arrival_en: 'New arrival', new_arrival_km: 'ទំនិញថ្មី',
   hero_text_en: 'Curated clothing and bags. Prices are in USD. Delivery or pickup available.',
   hero_text_km: 'សម្លៀកបំពាក់ និងកាបូបដែលបានជ្រើសរើស។ តម្លៃគិតជា USD។ មានដឹកជញ្ជូន ឬមកយកផ្ទាល់។'
 };
