@@ -137,7 +137,7 @@ button{cursor:pointer;border:0}
 .shipping-summary{display:flex;justify-content:space-between;margin:12px 0 4px;color:var(--muted)}
 .shipping-summary strong{color:#225e49}
 .shipping-hint{display:block;color:var(--accent);margin:0 0 12px}
-.product-showcase-list{gap:20px}
+.product-showcase-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
 .product-showcase{border:1px solid var(--line);border-radius:24px}
 .product-showcase .product-image{aspect-ratio:4/5}
 .showcase-info{padding:22px 24px 26px;background:#fff}
@@ -162,11 +162,13 @@ button{cursor:pointer;border:0}
   .product-detail{padding:16px;margin-top:12px}
   .detail-info h2{font-size:30px}
   .long-detail-image{margin-top:20px;padding-top:14px}
-  .product-showcase-list{grid-template-columns:1fr;gap:14px}
+  .product-showcase-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .product-showcase{border-radius:20px}
-  .showcase-info{padding:20px 20px 22px}
-  .showcase-name{font-size:38px;margin-bottom:20px}
-  .shipping-badge{min-width:0;padding:8px 10px}
-  .shipping-badge b{font-size:22px}
-  .showcase-price{font-size:54px}
+  .showcase-info{padding:13px 12px 14px}
+  .showcase-name{font-size:20px;margin-bottom:13px}
+  .showcase-footer{gap:6px}
+  .shipping-badge{min-width:0;padding:6px 7px;border-radius:7px}
+  .shipping-badge b{font-size:15px}
+  .shipping-badge span{font-size:7px}
+  .showcase-price{font-size:30px}
 }
