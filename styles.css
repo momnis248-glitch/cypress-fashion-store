@@ -150,10 +150,10 @@ button{cursor:pointer;border:0}
 .showcase-price{font-size:clamp(28px,3.7vw,44px);font-weight:700;line-height:1;letter-spacing:-.04em}
 .product-showcase .showcase-price{margin-top:10px;text-align:left}
 .product-detail>.back{display:inline-block;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:9px 12px;color:var(--accent);margin-bottom:14px}
-.product-showcase .showcase-info{padding:15px 17px}
-.product-showcase .showcase-footer{align-items:center;gap:10px}
-.product-showcase .showcase-name{flex:1;min-width:0;margin:0;font-size:clamp(17px,2vw,24px);line-height:1.18}
-.product-showcase .showcase-price{flex:none;margin:0;font-size:clamp(22px,3vw,34px);white-space:nowrap}
+.product-showcase .showcase-info{padding:12px 14px}
+.product-showcase .showcase-footer{display:block;position:relative;min-height:43px}
+.product-showcase .showcase-name{display:block;min-width:0;margin:0;font-size:clamp(15px,1.7vw,20px);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.product-showcase .showcase-price{position:absolute;right:0;bottom:0;margin:0;font-size:clamp(19px,2.5vw,28px);white-space:nowrap}
 @media(max-width:700px){
   .shell{padding:0 12px 28px}
   .topbar{position:relative;height:112px;margin:0 -12px;padding:0 12px;background:var(--paper);border-bottom:1px solid var(--line);justify-content:flex-end}
@@ -170,11 +170,12 @@ button{cursor:pointer;border:0}
   .long-detail-image{margin-top:20px;padding-top:14px}
   .product-showcase-list{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .product-showcase{border-radius:20px}
-  .showcase-info{padding:11px 12px}
-  .showcase-name{font-size:15px;margin-bottom:0}
+  .showcase-info{padding:10px 11px}
+  .showcase-footer{min-height:38px}
+  .showcase-name{font-size:13px;margin-bottom:0}
   .showcase-footer{gap:6px}
   .shipping-badge{min-width:0;padding:6px 7px;border-radius:7px}
   .shipping-badge b{font-size:15px}
   .shipping-badge span{font-size:7px}
-  .showcase-price{font-size:22px;letter-spacing:-.03em}
+  .showcase-price{font-size:19px;letter-spacing:-.02em}
 }
