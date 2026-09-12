@@ -122,6 +122,8 @@ button{cursor:pointer;border:0}
 .status-paid,.status-completed{background:#e5f0ea;color:#225e49}
 .status-shipping,.status-ready_for_pickup{background:#edf2f8;color:#315d8c}
 .status-cancelled{background:#f6e0d8;color:#8d2b1c}
+.order-delete{display:block;margin:8px 0 0;width:100%;font-size:12px}
+.customer-order-delete{grid-column:2;grid-row:3;margin:0;font-size:12px}
 @media(max-width:700px){
   .shell{padding:0 12px 28px}
   .topbar{position:relative;height:112px;margin:0 -12px;padding:0 12px;background:var(--paper);border-bottom:1px solid var(--line);justify-content:flex-end}
