@@ -124,6 +124,10 @@ button{cursor:pointer;border:0}
 .status-cancelled{background:#f6e0d8;color:#8d2b1c}
 .order-delete{display:block;margin:8px 0 0;width:100%;font-size:12px}
 .customer-order-delete{grid-column:2;grid-row:3;margin:0;font-size:12px}
+.brand-button{background:transparent;padding:0;text-align:left;color:var(--ink)}
+.customer-actions{display:flex;gap:14px;justify-content:center;margin:26px 0 10px}
+.customer-action{min-width:142px;padding:14px 18px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px;font-weight:700;color:var(--ink);box-shadow:0 1px 0 rgba(0,0,0,.04)}
+.customer-action:active{transform:translateY(1px)}
 @media(max-width:700px){
   .shell{padding:0 12px 28px}
   .topbar{position:relative;height:112px;margin:0 -12px;padding:0 12px;background:var(--paper);border-bottom:1px solid var(--line);justify-content:flex-end}
@@ -132,6 +136,8 @@ button{cursor:pointer;border:0}
   .topbar .top-actions{display:flex;position:absolute;right:8px;bottom:10px;gap:3px}
   .topbar .pill{padding:6px;font-size:11px;background:var(--paper)}
   .topbar .pill.active{background:var(--ink);color:#fff}
+  .customer-actions{gap:10px;margin:22px 0 8px}
+  .customer-action{min-width:0;flex:1;padding:15px 12px;font-size:16px}
   .section-head{margin:22px 0 12px}
   .product-detail{padding:16px;margin-top:12px}
   .detail-info h2{font-size:30px}
