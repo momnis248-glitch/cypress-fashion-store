@@ -114,13 +114,21 @@ button{cursor:pointer;border:0}
 .payment-qr{display:block;width:min(100%,340px);margin:18px auto;border-radius:12px;background:#fff}
 .payment-note{color:var(--muted);line-height:1.5}
 .added-message{position:fixed;z-index:9999;left:50%;bottom:82px;transform:translateX(-50%);background:#225e49;color:#fff;padding:12px 18px;border-radius:100px;box-shadow:0 8px 20px rgba(0,0,0,.18);font-weight:700;white-space:nowrap}
+.customer-order{display:grid;grid-template-columns:1fr auto;gap:10px;padding:16px 0;border-bottom:1px solid var(--line)}
+.customer-order:last-child{border-bottom:0}
+.customer-order small,.customer-order-items{color:var(--muted);font-size:13px}
+.customer-order-items{grid-column:1/-1;line-height:1.55}
+.order-status{align-self:start;border-radius:100px;padding:6px 9px;font-size:12px;font-weight:700;background:#eee8e0;color:var(--ink)}
+.status-paid,.status-completed{background:#e5f0ea;color:#225e49}
+.status-shipping,.status-ready_for_pickup{background:#edf2f8;color:#315d8c}
+.status-cancelled{background:#f6e0d8;color:#8d2b1c}
 @media(max-width:700px){
   .shell{padding:0 12px 28px}
   .topbar{position:relative;height:112px;margin:0 -12px;padding:0 12px;background:var(--paper);border-bottom:1px solid var(--line);justify-content:flex-end}
-  .topbar .brand{display:block;position:absolute;left:12px;bottom:9px;font-size:16px;line-height:1.05}
+  .topbar .brand{display:block;position:absolute;left:8px;bottom:9px;font-size:15px;line-height:1.05}
   .topbar .brand span{display:block;font-size:7px;letter-spacing:.16em;margin-top:3px}
-  .topbar .top-actions{display:flex;position:absolute;right:12px;bottom:10px;gap:6px}
-  .topbar .pill{padding:7px 10px;font-size:13px;background:var(--paper)}
+  .topbar .top-actions{display:flex;position:absolute;right:8px;bottom:10px;gap:3px}
+  .topbar .pill{padding:6px;font-size:11px;background:var(--paper)}
   .topbar .pill.active{background:var(--ink);color:#fff}
   .section-head{margin:22px 0 12px}
   .product-detail{padding:16px;margin-top:12px}
