@@ -150,6 +150,8 @@ button{cursor:pointer;border:0}
 .showcase-price{font-size:clamp(28px,3.7vw,44px);font-weight:700;line-height:1;letter-spacing:-.04em}
 .product-showcase .showcase-price{margin-top:10px;text-align:left}
 .product-detail>.back{display:inline-block;border:1px solid var(--line);border-radius:8px;background:var(--card);padding:9px 12px;color:var(--accent);margin-bottom:14px}
+.bag-charms-note{margin:7px 0 0;color:var(--accent);font-size:13px;font-weight:700;line-height:1.4}
+.bag-charms-choice{margin:4px 0 14px}
 .product-showcase .showcase-info{padding:12px 14px}
 .product-showcase .showcase-footer{display:block;position:relative;min-height:43px}
 .product-showcase .showcase-name{display:block;min-width:0;margin:0;font-size:clamp(15px,1.7vw,20px);line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
