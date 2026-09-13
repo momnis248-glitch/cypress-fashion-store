@@ -51,14 +51,33 @@ async function getOwnerChatId() {
   return String(settings?.[0]?.owner_telegram_chat_id || '');
 }
 async function forwardPaymentProof(message) {
-  const ownerChatId = await getOwnerChatId();
-  if (!ownerChatId) return;
+  const file = message.photo?.at(-1) || message.document;
+  const fileId = String(file?.file_id || '');
+  const mimeType = String(message.document?.mime_type || 'image/jpeg');
   const sender = [message.from?.first_name, message.from?.last_name].filter(Boolean).join(' ') || 'Customer';
   const username = message.from?.username ? `@${message.from.username}` : 'No username';
-  const note = String(message.caption || 'No order number was included.').trim();
-  await telegramApi('sendMessage', { chat_id: ownerChatId, text: `💳 New payment proof\nCustomer: ${sender} (${username})\nCustomer chat: ${message.chat.id}\nNote / order: ${note}` });
-  await telegramApi('forwardMessage', { chat_id: ownerChatId, from_chat_id: message.chat.id, message_id: message.message_id });
-  await telegramApi('sendMessage', { chat_id: message.chat.id, text: 'Payment proof received. The store will check it and confirm your order.\nបានទទួលភស្តុតាងការបង់ប្រាក់ហើយ។ ហាងនឹងពិនិត្យ និងបញ្ជាក់ការបញ្ជាទិញរបស់អ្នក។' });
+  const note = [message.caption, message.reply_to_message?.caption, message.reply_to_message?.text].filter(Boolean).join('\n');
+  const match = note.match(/\b(?:ORDER-\d{8}-\d{4,}|CYP-[A-Z0-9-]{6,})\b/i);
+  const customerId = String(message.from?.id || '');
+  let order = null;
+  if (match && customerId) {
+    const rows = await db(`orders?select=*&order_number=eq.${encodeURIComponent(match[0].toUpperCase())}&telegram_user_id=eq.${encodeURIComponent(customerId)}&limit=1`);
+    order = rows?.[0] || null;
+  }
+  if (!order && customerId) {
+    const pending = await db(`orders?select=*&telegram_user_id=eq.${encodeURIComponent(customerId)}&status=in.(awaiting_payment,payment_rejected)&order=created_at.desc&limit=2`);
+    if (pending?.length === 1) order = pending[0];
+  }
+  if (order && fileId) {
+    const saved = await db(`orders?id=eq.${order.id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ status: 'payment_proof_uploaded', payment_proof_file_id: fileId, payment_proof_mime_type: mimeType, payment_proof_at: new Date().toISOString() }) });
+    order = saved?.[0] || order;
+  }
+  const ownerChatId = await getOwnerChatId();
+  if (ownerChatId) {
+    await telegramApi('sendMessage', { chat_id: ownerChatId, text: `💳 New payment proof\nCustomer: ${sender} (${username})\nCustomer chat: ${message.chat.id}\nOrder: ${order?.order_number || 'No matching order found'}\n${order ? 'Saved in Orders — waiting for manual confirmation.' : 'Ask the customer to reply to the payment QR or include the order number.'}` });
+    await telegramApi('forwardMessage', { chat_id: ownerChatId, from_chat_id: message.chat.id, message_id: message.message_id });
+  }
+  await telegramApi('sendMessage', { chat_id: message.chat.id, text: order ? `Payment proof for ${order.order_number} received. The store will check it and confirm your order.\nបានទទួលភស្តុតាងការបង់ប្រាក់សម្រាប់ ${order.order_number} ហើយ។ ហាងនឹងពិនិត្យ និងបញ្ជាក់ការបញ្ជាទិញរបស់អ្នក។` : 'We could not match this payment proof to an order. Please reply to the payment QR or send your order number with the screenshot.\nមិនអាចរកឃើញលេខបញ្ជាទិញបានទេ។ សូមឆ្លើយតបទៅ QR បង់ប្រាក់ ឬផ្ញើលេខបញ្ជាទិញជាមួយរូបភាព។' });
 }
 async function notifyOrderStatus(order) {
   if (!process.env.BOT_TOKEN || !/^\d+$/.test(String(order?.telegram_user_id || ''))) return;
@@ -70,13 +89,18 @@ async function notifyOrderStatus(order) {
     completed: `您的订单 ${order.order_number} 已确认收货，感谢您的购买。\nការបញ្ជាទិញ ${order.order_number} បានបញ្ជាក់ថាទទួលរួចហើយ។ សូមអរគុណសម្រាប់ការទិញ。`,
     cancelled: `您的订单 ${order.order_number} 已取消。\nការបញ្ជាទិញ ${order.order_number} ត្រូវបានលុបចោល។`
   };
+  messages.payment_proof_uploaded = 'Payment proof received. Your order is waiting for manual confirmation.\nបានទទួលភស្តុតាងការបង់ប្រាក់ ហើយកំពុងរង់ចាំការបញ្ជាក់។';
+  messages.payment_rejected = `Your payment proof for ${order.order_number} was not approved. Please pay again or upload a new proof.\nភស្តុតាងការបង់ប្រាក់សម្រាប់ ${order.order_number} មិនត្រូវបានអនុម័តទេ។ សូមផ្ទុកឡើងវិញ។`;
+  messages.processing = `Your order ${order.order_number} is being prepared.\nការបញ្ជាទិញ ${order.order_number} កំពុងរៀបចំ។`;
+  messages.paid = `Payment confirmed ✅\nYour order ${order.order_number} has been confirmed.\n${(order.items || []).some(item => item.sale_type === 'preorder') ? 'Pre-order: Delivery in 15–18 days after placing the order.' : order.delivery === 'pickup' ? 'Self-Pickup: Available after work the next day. Pickup Location: Security Room at T20 Factory.' : 'In Stock – Delivery: Delivery in 3–4 days.'}`;
   await telegramApi('sendMessage', { chat_id: order.telegram_user_id, text: `Order ${order.order_number}\n${messages[order.status] || 'Your order status was updated.'}` });
 }
 async function sendPaymentQr(chatId, order) {
   if (!process.env.BOT_TOKEN) throw Error('BOT_TOKEN is not configured.');
   await ensureTelegramWebhook().catch(error => console.error(error.message));
   const photo = process.env.PAYMENT_QR_FILE_ID || process.env.PAYMENT_QR_IMAGE_URL || `${process.env.RENDER_EXTERNAL_URL}/payment-qr.png`;
-  const caption = ['Payment QR / QR កូដបង់ប្រាក់', '', `Order: ${order.order_number}`, `Total: $${Number(order.total).toFixed(2)}`, order.delivery === 'pickup' ? 'Pickup / មកយកផ្ទាល់' : 'Delivery / ដឹកជញ្ជូន', '', 'Please pay the exact amount, then send a payment screenshot and this order number in this chat.', 'សូមបង់ចំនួនទឹកប្រាក់ឲ្យត្រឹមត្រូវ ហើយផ្ញើរូបភាពបញ្ជាក់ការបង់ប្រាក់ និងលេខបញ្ជាទិញក្នុងការជជែកនេះ។'].join('\n');
+  const items = (order.items || []).map(item => `• ${item.quantity} × ${item.name}${item.color ? ` (${item.color}${item.size ? ` / ${item.size}` : ''})` : item.size ? ` (${item.size})` : ''}`).join('\n');
+  const caption = ['Payment QR / QR កូដបង់ប្រាក់', '', `Order: ${order.order_number}`, items, `Total: $${Number(order.total).toFixed(2)}`, order.delivery === 'pickup' ? 'Pickup / មកយកផ្ទាល់' : 'Delivery / ដឹកជញ្ជូន', '', 'Please scan the QR code to complete payment. After payment, reply to this message with your payment screenshot.', 'សូមស្កេន QR ដើម្បីបង់ប្រាក់ ហើយឆ្លើយតបសារនេះជាមួយរូបភាពបញ្ជាក់ការបង់ប្រាក់។'].filter(Boolean).join('\n').slice(0, 1024);
   await telegramApi('sendPhoto', { chat_id: chatId, photo, caption });
 }
 async function publishProductToChannel(product) {
@@ -150,6 +174,71 @@ productInput = function productInputWithInventory(input) { const name_en = Strin
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
+    // Payment orders are created before a QR is sent. They deliberately do not
+    // deduct stock until the administrator confirms the uploaded proof.
+    if (req.method === 'POST' && url.pathname === '/api/orders') {
+      const input = await readBody(req), telegramUser = verifyTelegramInitData(input.telegramInitData), webOrder = !input.telegramInitData;
+      if (!telegramUser && !webOrder) return sendJson(res, 401, { error: 'Telegram verification failed.' });
+      if (!Array.isArray(input.items) || !input.items.length) return sendJson(res, 400, { error: 'Invalid order.' });
+      const productIds = [...new Set(input.items.map(item => String(item.id || '')).filter(id => /^[\w-]+$/.test(id)))];
+      const products = await db(`products?select=id,name_en,price,sale_type,variant_sale_types,stock_by_sku,published&id=in.(${productIds.join(',')})`);
+      if (!products?.length || products.length !== productIds.length || products.some(product => !product.published)) return sendJson(res, 400, { error: 'A product is no longer available.' });
+      const productMap = new Map(products.map(product => [product.id, product]));
+      const items = input.items.map(item => {
+        const product = productMap.get(String(item.id)), quantity = Math.max(1, Math.floor(Number(item.quantity) || 0)), sku = inventoryKey(item);
+        if (!product || !quantity) throw Error('Invalid order item.');
+        return { id: product.id, name: product.name_en, size: String(item.size || ''), color: String(item.color || ''), sku, quantity, price: Number(product.price), sale_type: productVariantSaleType(product, item) };
+      });
+      const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      const settings = (await db('store_settings?select=shipping,free_shipping_threshold&id=eq.1'))?.[0] || defaults;
+      const delivery = input.delivery === 'pickup' ? 'pickup' : 'delivery', region = String(input.region || '');
+      const threshold = Number(settings.free_shipping_threshold), deliveryFee = Number(String(settings.shipping?.[region] || '$0').replace('$', ''));
+      const shipping = delivery === 'delivery' && !(Number.isFinite(threshold) && threshold > 0 && subtotal >= threshold) ? deliveryFee : 0;
+      const order = { telegram_user_id: String(telegramUser?.id || `web-${randomUUID()}`), customer_name: String(input.name || '').trim(), contact: String(input.contact || '').trim(), address: String(input.address || '').trim(), delivery, region, items, subtotal, shipping, total: subtotal + shipping };
+      if (!order.customer_name || !order.contact) return sendJson(res, 400, { error: 'Customer information is required.' });
+      const saved = await db('rpc/create_pending_order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ p_order: order }) });
+      if (telegramUser) await sendPaymentQr(telegramUser.id, saved).catch(error => console.error(error.message));
+      return sendJson(res, 201, { order_number: saved.order_number, status: saved.status, payment_qr_url: telegramUser ? '' : (process.env.PAYMENT_QR_IMAGE_URL || '/payment-qr.png') });
+    }
+    if (req.method === 'POST' && /^\/api\/admin\/orders\/[\w-]+\/confirm-payment$/.test(url.pathname)) {
+      if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
+      const id = url.pathname.split('/')[4];
+      const saved = await db('rpc/confirm_order_payment', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ p_order_id: id }) });
+      await notifyOrderStatus(saved).catch(error => console.error(error.message));
+      return sendJson(res, 200, saved);
+    }
+    if (req.method === 'POST' && /^\/api\/admin\/orders\/[\w-]+\/reject-payment$/.test(url.pathname)) {
+      if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
+      const id = url.pathname.split('/')[4];
+      const saved = await db(`orders?id=eq.${id}&status=eq.payment_proof_uploaded`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ status: 'payment_rejected' }) });
+      if (!saved?.[0]) return sendJson(res, 400, { error: 'This order has no payment proof waiting for review.' });
+      await notifyOrderStatus(saved[0]).catch(error => console.error(error.message));
+      return sendJson(res, 200, saved[0]);
+    }
+    if (req.method === 'GET' && /^\/api\/admin\/orders\/[\w-]+\/payment-proof$/.test(url.pathname)) {
+      if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
+      const id = url.pathname.split('/')[4], rows = await db(`orders?select=payment_proof_file_id,payment_proof_mime_type&id=eq.${id}&limit=1`), proof = rows?.[0];
+      if (!proof?.payment_proof_file_id) return sendJson(res, 404, { error: 'Payment proof was not found.' });
+      const telegramFile = await telegramApi('getFile', { file_id: proof.payment_proof_file_id });
+      const upstream = await fetch(`https://api.telegram.org/file/bot${process.env.BOT_TOKEN}/${telegramFile.result?.file_path || ''}`);
+      if (!upstream.ok) return sendJson(res, 502, { error: 'Payment proof could not be downloaded.' });
+      res.writeHead(200, { 'content-type': proof.payment_proof_mime_type || upstream.headers.get('content-type') || 'image/jpeg', 'cache-control': 'private, max-age=60' });
+      return res.end(Buffer.from(await upstream.arrayBuffer()));
+    }
+    if (req.method === 'PATCH' && /^\/api\/admin\/orders\/[\w-]+$/.test(url.pathname)) {
+      if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
+      const { status } = await readBody(req), id = url.pathname.split('/').pop();
+      if (status === 'cancelled') {
+        const saved = await db('rpc/cancel_order_safely', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ p_order_id: id }) });
+        await notifyOrderStatus(saved).catch(error => console.error(error.message));
+        return sendJson(res, 200, saved);
+      }
+      if (!['processing', 'shipping', 'ready_for_pickup', 'completed'].includes(status)) return sendJson(res, 400, { error: 'Use Confirm payment to mark an order as paid.' });
+      const saved = await db(`orders?id=eq.${id}&status=in.(paid,processing,shipping,ready_for_pickup)`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ status }) });
+      if (!saved?.[0]) return sendJson(res, 400, { error: 'This order must be payment-confirmed before fulfilment.' });
+      await notifyOrderStatus(saved[0]).catch(error => console.error(error.message));
+      return sendJson(res, 200, saved[0]);
+    }
     if (req.method === 'GET' && url.pathname === '/api/store') { const [settings, products] = await Promise.all([db('store_settings?select=*&id=eq.1'), db('products?select=*&published=eq.true&order=created_at.desc')]); return sendJson(res, 200, { settings: settings?.[0] || defaults, products: products || [] }); }
     if (req.method === 'GET' && url.pathname === '/api/admin/store') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const [settings, products, orders] = await Promise.all([db('store_settings?select=*&id=eq.1'), db('products?select=*&order=created_at.desc'), db('orders?select=*&order=created_at.desc&limit=500')]); return sendJson(res, 200, { settings: settings?.[0] || defaults, products: products || [], orders: orders || [] }); }
     if (req.method === 'PUT' && url.pathname === '/api/admin/settings') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req); const free_shipping_threshold = Number(input.free_shipping_threshold); const settings = { id: 1, ...defaults, ...input, pickup: String(input.pickup || '').trim(), shipping: input.shipping || defaults.shipping, default_delivery_notes: cleanDeliveryNotes(input.default_delivery_notes || defaults.default_delivery_notes), free_shipping_threshold: Number.isFinite(free_shipping_threshold) && free_shipping_threshold >= 0 ? free_shipping_threshold : defaults.free_shipping_threshold }; if (!settings.pickup) return sendJson(res, 400, { error: 'Pickup address is required.' }); await db('store_settings?id=eq.1', { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(settings) }); return sendJson(res, 200, settings); }
