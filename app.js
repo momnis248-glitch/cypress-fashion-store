@@ -262,6 +262,8 @@ if(!window.__cypressPageMemoryEnabled){
     myOrdersPage=()=>String(finalOrders()).replaceAll('onclick="showShop()"','onclick="goBack()"');
     const finalManagement=productManagement;
     productManagement=()=>String(finalManagement()).replace(/onclick="state\.editId='([^']+)';state\.adminTab='products';render\(\)"/g,`onclick="beginEdit('$1')"`);
+    const finalAdmin=admin;
+    admin=()=>String(finalAdmin()).replaceAll('onclick="showShop()"','onclick="goBack()"');
   });
 }
 async function connectTelegramOwner(){try{const telegramInitData=window.Telegram?.WebApp?.initData||'';const result=await adminFetch('/api/admin/telegram-owner',{method:'POST',body:JSON.stringify({telegramInitData})});alert(result.message)}catch(error){alert(error.message)}}
