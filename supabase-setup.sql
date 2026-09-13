@@ -12,6 +12,7 @@ create table if not exists public.store_settings (
   new_arrival_km text not null default 'ទំនិញថ្មី',
   hero_text_en text not null default 'Curated clothing and bags. Prices are in USD. Delivery or pickup available.',
   hero_text_km text not null default 'សម្លៀកបំពាក់ និងកាបូបដែលបានជ្រើសរើស។ តម្លៃគិតជា USD។ មានដឹកជញ្ជូន ឬមកយកផ្ទាល់។',
+  default_delivery_notes jsonb not null default '{}'::jsonb,
   owner_telegram_chat_id text not null default '',
   updated_at timestamptz not null default now()
 );
@@ -38,6 +39,7 @@ create table if not exists public.products (
   image_url text not null,
   image_urls text[] not null default '{}',
   detail_image_url text not null default '',
+  delivery_notes jsonb not null default '{}'::jsonb,
   published boolean not null default true,
   featured boolean not null default false,
   created_at timestamptz not null default now()
