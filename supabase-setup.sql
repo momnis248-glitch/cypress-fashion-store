@@ -56,7 +56,8 @@ create table if not exists public.orders (
   subtotal numeric(10,2) not null,
   shipping numeric(10,2) not null,
   total numeric(10,2) not null,
-  status text not null default 'awaiting_payment' check (status in ('awaiting_payment', 'paid', 'shipping', 'ready_for_pickup', 'completed')),
+  status text not null default 'awaiting_payment' check (status in ('awaiting_payment', 'paid', 'shipping', 'ready_for_pickup', 'completed', 'cancelled')),
+  inventory_reversed boolean not null default false,
   created_at timestamptz not null default now()
 );
 
