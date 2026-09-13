@@ -56,7 +56,9 @@ async function saveDeliverySettings(event){
 
 setTimeout(()=>{
   const baseProductAdmin=variantProductAdmin,baseSettingsAdmin=settingsAdmin;
-  productAdmin=()=>baseProductAdmin().replace(/(<label class="field">[^<]*<input name="main_photo")/,`${deliveryNotesAdminFields(state.editId?state.products.find(p=>p.id===state.editId):null)}$1`);
+  productAdmin=()=>baseProductAdmin()
+    .replace(/<label class="field">[^<]*<textarea name="description_(?:en|km)"[^>]*>[\s\S]*?<\/textarea><\/label>/g,'')
+    .replace(/(<label class="field">[^<]*<input name="main_photo")/,`${deliveryNotesAdminFields(state.editId?state.products.find(p=>p.id===state.editId):null)}$1`);
   settingsAdmin=()=>baseSettingsAdmin().replace('<button class="primary">',`<fieldset class="delivery-notes-admin default-delivery-notes"><legend>默认配送说明 / Default delivery notes</legend><label class="field">English<textarea name="default_delivery_notes_en">${noteText(state.settings.default_delivery_notes||DELIVERY_NOTE_DEFAULTS,'en')}</textarea></label><label class="field">ខ្មែរ<textarea name="default_delivery_notes_km">${noteText(state.settings.default_delivery_notes||DELIVERY_NOTE_DEFAULTS,'km')}</textarea></label><small>新商品和未自定义配送说明的现有商品都会使用这里的内容。</small></fieldset><button class="primary">`);
   productDetail=deliveryProductDetail;
   saveProduct=saveDeliveryProduct;
