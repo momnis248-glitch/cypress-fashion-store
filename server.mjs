@@ -15,9 +15,14 @@ const defaults = {
     km: 'ទំនិញបញ្ជាទិញមុន (Pre-order): ទទួលបានទំនិញក្នុងរយៈពេល 15–18 ថ្ងៃ បន្ទាប់ពីធ្វើការបញ្ជាទិញ។\nទំនិញមានស្តុក – ដឹកជញ្ជូន: ទទួលបានទំនិញក្នុងរយៈពេល 3–4 ថ្ងៃ។\nមកយកដោយខ្លួនឯង: អាចមកយកបានបន្ទាប់ពីចេញពីធ្វើការនៅថ្ងៃបន្ទាប់។\nទីតាំងមកយក: បន្ទប់សន្តិសុខនៅរោងចក្រ T20។'
   }
 };
-const sendJson = (res, status, body) => { res.writeHead(status, { 'content-type': 'application/json' }); res.end(JSON.stringify(body)); };
+const sendJson = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)); };
 const readBody = req => new Promise((resolve, reject) => { let body = ''; req.on('data', chunk => { body += chunk; if (body.length > 22_000_000) reject(Error('Request too large')); }); req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { reject(Error('Invalid JSON')); } }); });
-const admin = req => Boolean(process.env.ADMIN_KEY) && req.headers['x-admin-key'] === process.env.ADMIN_KEY;
+const cookieValue = (req, name) => String(req.headers.cookie || '').split(';').map(item => item.trim().split('=')).find(([key]) => key === name)?.slice(1).join('=') || '';
+function secureEqual(left, right) { const a = Buffer.from(String(left)), b = Buffer.from(String(right)); return a.length === b.length && timingSafeEqual(a, b); }
+function adminSessionToken() { return createHmac('sha256', process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_KEY || '').update('cypress-fashion-store-admin-session-v1').digest('hex'); }
+const admin = req => Boolean(process.env.ADMIN_KEY) && secureEqual(cookieValue(req, 'cypress_admin_session'), adminSessionToken());
+const adminSessionCookie = () => `cypress_admin_session=${adminSessionToken()}; Path=/; HttpOnly; SameSite=Lax${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
+const clearAdminSessionCookie = () => 'cypress_admin_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
 const supabaseReady = () => Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 function supabase(path, options = {}) {
   if (!supabaseReady()) throw Error('Supabase is not configured on the server.');
@@ -174,6 +179,14 @@ productInput = function productInputWithInventory(input) { const name_en = Strin
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   try {
+    if (req.method === 'GET' && url.pathname === '/api/admin/session') return sendJson(res, 200, { authenticated: admin(req) });
+    if (req.method === 'POST' && url.pathname === '/api/admin/session') {
+      const input = await readBody(req), suppliedKey = String(input.adminKey || '');
+      if (!suppliedKey) return sendJson(res, 400, { error: 'Please enter the admin key.' });
+      if (!process.env.ADMIN_KEY || !secureEqual(suppliedKey, process.env.ADMIN_KEY)) return sendJson(res, 401, { error: 'Incorrect admin key. Please try again.' });
+      return sendJson(res, 200, { message: 'Access granted successfully.' }, { 'set-cookie': adminSessionCookie() });
+    }
+    if (req.method === 'DELETE' && url.pathname === '/api/admin/session') return sendJson(res, 204, {}, { 'set-cookie': clearAdminSessionCookie() });
     // Payment orders are created before a QR is sent. They deliberately do not
     // deduct stock until the administrator confirms the uploaded proof.
     if (req.method === 'POST' && url.pathname === '/api/orders') {
