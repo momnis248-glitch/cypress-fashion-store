@@ -81,7 +81,7 @@
   async function loadPaymentProof(id) {
     const target = document.querySelector('#payment-proof-image'); if (!target) return;
     try {
-      const response = await fetch(`/api/admin/orders/${id}/payment-proof`, { headers: { 'x-admin-key': key() } });
+      const response = await fetch(`/api/admin/orders/${id}/payment-proof`, { credentials: 'same-origin' });
       if (!response.ok) throw Error('Could not load payment proof.');
       const blob = await response.blob();
       const url = URL.createObjectURL(blob);
