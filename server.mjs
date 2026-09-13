@@ -74,6 +74,30 @@ async function sendPaymentQr(chatId, order) {
   const caption = ['Payment QR / QR កូដបង់ប្រាក់', '', `Order: ${order.order_number}`, `Total: $${Number(order.total).toFixed(2)}`, order.delivery === 'pickup' ? 'Pickup / មកយកផ្ទាល់' : 'Delivery / ដឹកជញ្ជូន', '', 'Please pay the exact amount, then send a payment screenshot and this order number in this chat.', 'សូមបង់ចំនួនទឹកប្រាក់ឲ្យត្រឹមត្រូវ ហើយផ្ញើរូបភាពបញ្ជាក់ការបង់ប្រាក់ និងលេខបញ្ជាទិញក្នុងការជជែកនេះ។'].join('\n');
   await telegramApi('sendPhoto', { chat_id: chatId, photo, caption });
 }
+async function publishProductToChannel(product) {
+  // A public channel username can be used as the Bot API chat_id. Keep the
+  // environment overrides so the shop can be moved to another channel later.
+  if (!process.env.BOT_TOKEN || !product?.published || !product?.image_url) return;
+  const channel = String(process.env.TELEGRAM_CHANNEL_USERNAME || '@cypress1111').trim();
+  const bot = String(process.env.STORE_BOT_USERNAME || 'Cypress11_bot').replace(/^@/, '').trim();
+  if (!channel || !bot) return;
+  const caption = [
+    '🛍 New product / ផលិតផលថ្មី',
+    product.name_en,
+    product.name_km,
+    `💵 $${Number(product.price).toFixed(2)}`,
+    product.description_en
+  ].filter(Boolean).join('\n').slice(0, 1024);
+  await telegramApi('sendPhoto', {
+    chat_id: channel,
+    photo: product.image_url,
+    caption,
+    reply_markup: { inline_keyboard: [[{
+      text: '🛒 查看商品详情 / មើលព័ត៌មាន',
+      url: `https://t.me/${bot}?startapp=shop`
+    }]] }
+  });
+}
 async function uploadProductImage(dataUrl) {
   const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || ''); if (!match) throw Error('Use a PNG, JPG, or WebP image.');
   const extension = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[match[1]]; const name = `${randomUUID()}.${extension}`;
@@ -97,7 +121,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/admin/store') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const [settings, products, orders] = await Promise.all([db('store_settings?select=*&id=eq.1'), db('products?select=*&order=created_at.desc'), db('orders?select=*&order=created_at.desc&limit=100')]); return sendJson(res, 200, { settings: settings?.[0] || defaults, products: products || [], orders: orders || [] }); }
     if (req.method === 'PUT' && url.pathname === '/api/admin/settings') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req); const free_shipping_threshold = Number(input.free_shipping_threshold); const settings = { id: 1, ...defaults, ...input, pickup: String(input.pickup || '').trim(), shipping: input.shipping || defaults.shipping, free_shipping_threshold: Number.isFinite(free_shipping_threshold) && free_shipping_threshold >= 0 ? free_shipping_threshold : defaults.free_shipping_threshold }; if (!settings.pickup) return sendJson(res, 400, { error: 'Pickup address is required.' }); await db('store_settings?id=eq.1', { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(settings) }); return sendJson(res, 200, settings); }
     if (req.method === 'POST' && url.pathname === '/api/admin/telegram-owner') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req), user = verifyTelegramInitData(input.telegramInitData); if (!user?.id) return sendJson(res, 400, { error: 'Open Admin from the Telegram Mini App before connecting this account.' }); await db('store_settings?id=eq.1', { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ owner_telegram_chat_id: String(user.id) }) }); await ensureTelegramWebhook().catch(error => console.error(error.message)); return sendJson(res, 200, { message: 'This Telegram account will receive payment screenshots.' }); }
-    if (req.method === 'POST' && url.pathname === '/api/admin/products') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req), item = productInput(input); item.image_url = input.mainImageData ? await uploadProductImage(input.mainImageData) : String(input.image_url || ''); item.detail_image_url = input.detailImageData ? await uploadProductImage(input.detailImageData) : String(input.detail_image_url || ''); item.image_urls = item.image_url ? [item.image_url] : []; if (!item.image_url || !item.detail_image_url) return sendJson(res, 400, { error: 'Main photo and detail photo are required.' }); const saved = await db('products', { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(item) }); return sendJson(res, 201, saved?.[0]); }
+    if (req.method === 'POST' && url.pathname === '/api/admin/products') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req), item = productInput(input); item.image_url = input.mainImageData ? await uploadProductImage(input.mainImageData) : String(input.image_url || ''); item.detail_image_url = input.detailImageData ? await uploadProductImage(input.detailImageData) : String(input.detail_image_url || ''); item.image_urls = item.image_url ? [item.image_url] : []; if (!item.image_url || !item.detail_image_url) return sendJson(res, 400, { error: 'Main photo and detail photo are required.' }); const saved = await db('products', { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(item) }); const product = saved?.[0]; await publishProductToChannel(product).catch(error => console.error(`Channel product post failed: ${error.message}`)); return sendJson(res, 201, product); }
     if (req.method === 'PATCH' && /^\/api\/admin\/products\/[\w-]+$/.test(url.pathname)) { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req), item = productInput(input); item.image_url = input.mainImageData ? await uploadProductImage(input.mainImageData) : String(input.image_url || ''); item.detail_image_url = input.detailImageData ? await uploadProductImage(input.detailImageData) : String(input.detail_image_url || ''); item.image_urls = item.image_url ? [item.image_url] : []; if (!item.image_url) return sendJson(res, 400, { error: 'Main photo is required.' }); const saved = await db(`products?id=eq.${url.pathname.split('/').pop()}`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(item) }); return sendJson(res, 200, saved?.[0]); }
     if (req.method === 'DELETE' && /^\/api\/admin\/products\/[\w-]+$/.test(url.pathname)) { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); await db(`products?id=eq.${url.pathname.split('/').pop()}`, { method: 'DELETE' }); return sendJson(res, 204, {}); }
     if (req.method === 'PATCH' && /^\/api\/admin\/orders\/[\w-]+$/.test(url.pathname)) { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const { status } = await readBody(req); const allowed = ['awaiting_payment', 'paid', 'shipping', 'ready_for_pickup', 'completed']; if (!allowed.includes(status)) return sendJson(res, 400, { error: 'Invalid order status.' }); const saved = await db(`orders?id=eq.${url.pathname.split('/').pop()}`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ status }) }); await notifyOrderStatus(saved?.[0]).catch(error => console.error(error.message)); return sendJson(res, 200, saved?.[0]); }
