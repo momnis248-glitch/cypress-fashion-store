@@ -23,7 +23,7 @@ function toggleCustomDeliveryNotes(input){const box=document.querySelector('#cus
 
 function deliveryProductDetail(){
   const p=state.products.find(x=>x.id===state.productId);if(!p){showShop();return ''}
-  const size=selectedOption(p.id,'size'),color=selectedOption(p.id,'color'),type=variantType(p,size,color),blocked=type==='in_stock'&&variantStock(p,size,color)<1,detail=p.detail_image_url||p.image_url,note=p.category==='bags'&&p.excludes_charms?`<p class="bag-charms-note">${t('excludesCharms')}</p>`:'';
+  const size=selectedOption(p.id,'size'),color=selectedOption(p.id,'color'),type=variantType(p,size,color),blocked=type==='in_stock'&&variantStock(p,size,color)<1,detail=p.detail_image_url||p.image_url,note=p.excludes_charms?`<p class="bag-charms-note">${t('excludesCharms')}</p>`:'';
   return `<section class="panel product-detail"><button class="back" onclick="goBack()">${t('backToShop')}</button><div class="detail-info">${variantSaleBadge(type)}<span class="category-label">${t(p.category)}</span><h2>${productName(p)}</h2><div class="detail-price">${money(p.price)}</div>${note}${deliveryNoteMarkup(p)}${stockAwarePicker(p)}<button class="add" ${blocked?'disabled':''} onclick="add('${p.id}')">${blocked?'SOLD OUT / អស់ស្តុក':t('add')}</button></div><div class="long-detail-image"><img src="${detail}" alt="${p.name_en}"></div></section>`;
 }
 
@@ -54,13 +54,22 @@ async function saveDeliverySettings(event){
   try{const saved=await adminFetch('/api/admin/settings',{method:'PUT',body:JSON.stringify(data)});state.settings=saved||data;render();showAdminSuccess('默认配送说明已保存 ✓')}catch(error){alert(error.message)}
 }
 
+function charmAwareShop(){
+  const list=state.category==='all'?state.products:state.products.filter(p=>p.category===state.category),hero=state.language==='km'?state.settings.hero_km:state.settings.hero_en,heroText=state.language==='km'?state.settings.hero_text_km:state.settings.hero_text_en;
+  return `<section class="hero"><div class="hero-main"><div class="eyebrow">${t('heroTag')}</div><h1>${hero}</h1><p>${heroText}</p></div><div class="hero-side"><strong>${newArrivalText()}</strong></div></section>${customerActions()}${typeof channelButton==='function'?channelButton():''}<div class="section-head"><h2>${t('featured')}</h2><small>${list.length} ${t('items')}</small></div><div class="filters">${['all','clothes','bags','charms'].map(x=>`<button class="filter ${state.category===x?'selected':''}" onclick="setCategory('${x}')">${t(x)}</button>`).join('')}</div><div class="products product-showcase-list">${list.map(p=>{const sold=productSoldOut(p),type=productCardType(p),name=productName(p);return `<article class="product product-showcase ${sold?'sold-out-card':''}"><button class="product-image product-image-button" onclick="showProduct('${p.id}')">${image(p)}${sold?'<span class="sold-out-overlay">SOLD OUT<br>អស់ស្តុក</span>':''}</button><div class="showcase-info showcase-info-aligned"><h3 class="showcase-name ${name.length>20?'two-lines':''}"><button class="title-button" onclick="showProduct('${p.id}')">${name}</button></h3><div class="showcase-bottom">${variantSaleBadge(type)}<div class="showcase-price">${money(p.price)}</div></div>${p.excludes_charms?`<small class="card-charms-note">${t('excludesCharms')}</small>`:''}</div></article>`}).join('')||`<div class="empty">${t('noProducts')}</div>`}</div><button class="cart" onclick="showCart()">${t('bag')} · ${state.cart.reduce((n,x)=>n+x.qty,0)}</button>`;
+}
+
 setTimeout(()=>{
   const baseProductAdmin=variantProductAdmin,baseSettingsAdmin=settingsAdmin;
   productAdmin=()=>baseProductAdmin()
     .replace(/<label class="field">[^<]*<textarea name="description_(?:en|km)"[^>]*>[\s\S]*?<\/textarea><\/label>/g,'')
+    .replace(/(<label id="bag-charms-field"[^>]*?)\s+hidden(>)/,'$1$2')
     .replace(/(<label class="field">[^<]*<input name="main_photo")/,`${deliveryNotesAdminFields(state.editId?state.products.find(p=>p.id===state.editId):null)}$1`);
+  const previousToggleSizeField=toggleSizeField;
+  toggleSizeField=category=>{previousToggleSizeField(category);const field=document.querySelector('#bag-charms-field');if(field)field.hidden=false};
   settingsAdmin=()=>baseSettingsAdmin().replace('<button class="primary">',`<fieldset class="delivery-notes-admin default-delivery-notes"><legend>默认配送说明 / Default delivery notes</legend><label class="field">English<textarea name="default_delivery_notes_en">${noteText(state.settings.default_delivery_notes||DELIVERY_NOTE_DEFAULTS,'en')}</textarea></label><label class="field">ខ្មែរ<textarea name="default_delivery_notes_km">${noteText(state.settings.default_delivery_notes||DELIVERY_NOTE_DEFAULTS,'km')}</textarea></label><small>新商品和未自定义配送说明的现有商品都会使用这里的内容。</small></fieldset><button class="primary">`);
   productDetail=deliveryProductDetail;
+  shop=charmAwareShop;
   saveProduct=saveDeliveryProduct;
   saveSettings=saveDeliverySettings;
 },0);
