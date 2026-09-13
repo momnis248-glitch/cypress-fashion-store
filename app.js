@@ -186,13 +186,16 @@ if(!window.__cypressPageMemoryEnabled){
     document.querySelectorAll('img').forEach(img=>{if(!img.complete)img.addEventListener('load',move,{once:true})});
   }
   render=function(options={}){
+    // Normal re-renders (quantity, filter, inventory updates) keep the page where it is.
+    // A navigation supplies restoreScroll itself, so it must not be replaced here.
+    if(!state.restoreScroll&&options.restore!==false)storeCurrentPage();
     const restore=options.restore===false?null:(state.restoreScroll||state.pageMemory[pageKey()]);
     state.restoreScroll=null;
     baseRender();
     if(restore)restorePage(restore);
   };
-  function pushHistory(snap){
-    try{history.replaceState({cypressPage:storeCurrentPage()},'',location.href);history.pushState({cypressPage:snap},'',location.href)}catch{}
+  function pushHistory(leaving,entering){
+    try{history.replaceState({cypressPage:leaving},'',location.href);history.pushState({cypressPage:entering},'',location.href)}catch{}
   }
   function navigate(next){
     const leaving=storeCurrentPage();
@@ -200,7 +203,7 @@ if(!window.__cypressPageMemoryEnabled){
     Object.assign(state,next);
     const entering=pageSnapshot();entering.scrollY=0;entering.forms={};
     state.restoreScroll=entering;
-    pushHistory(entering);
+    pushHistory(leaving,entering);
     render();
     syncTelegramBackButton();
   }
@@ -257,6 +260,8 @@ if(!window.__cypressPageMemoryEnabled){
     productDetail=()=>String(finalDetail()).replace(/onclick="showShop\(\)"/,`onclick="goBack()"`);
     cart=()=>String(finalCart()).replace(/onclick="showShop\(\)"/,`onclick="goBack()"`);
     myOrdersPage=()=>String(finalOrders()).replaceAll('onclick="showShop()"','onclick="goBack()"');
+    const finalManagement=productManagement;
+    productManagement=()=>String(finalManagement()).replace(/onclick="state\.editId='([^']+)';state\.adminTab='products';render\(\)"/g,`onclick="beginEdit('$1')"`);
   });
 }
 async function connectTelegramOwner(){try{const telegramInitData=window.Telegram?.WebApp?.initData||'';const result=await adminFetch('/api/admin/telegram-owner',{method:'POST',body:JSON.stringify({telegramInitData})});alert(result.message)}catch(error){alert(error.message)}}
