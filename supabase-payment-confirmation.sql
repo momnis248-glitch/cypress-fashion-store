@@ -76,6 +76,16 @@ begin
     raise exception 'A payment proof must be uploaded before payment can be confirmed.';
   end if;
 
+  -- Older CYP orders were created by the previous system, which already
+  -- deducted inventory at checkout. Do not subtract that inventory twice.
+  if order_row.order_number like 'CYP-%' then
+    update public.orders
+    set status = 'paid', payment_confirmed_at = now(), inventory_reversed = false
+    where id = p_order_id
+    returning * into order_row;
+    return to_jsonb(order_row);
+  end if;
+
   for item in select value from jsonb_array_elements(order_row.items) loop
     select * into product_row from public.products where id = (item->>'id')::uuid for update;
     if not found then raise exception 'A product in this order no longer exists.'; end if;
@@ -121,7 +131,7 @@ begin
   if not found then raise exception 'Order was not found.'; end if;
   if order_row.status = 'cancelled' then return to_jsonb(order_row); end if;
 
-  if order_row.status in ('paid', 'processing', 'shipping', 'ready_for_pickup', 'completed') then
+  if order_row.status in ('paid', 'processing', 'shipping', 'ready_for_pickup', 'completed') or order_row.order_number like 'CYP-%' then
     for item in select value from jsonb_array_elements(order_row.items) loop
       if coalesce(item->>'sale_type', 'preorder') = 'in_stock' then
         select * into product_row from public.products where id = (item->>'id')::uuid for update;
