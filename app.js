@@ -136,6 +136,129 @@ function settingsAdmin(){const fees=Object.entries(state.settings.shipping||{}).
 function newArrivalText(){return state.language==='km'?(state.settings.new_arrival_km||t('new')):(state.settings.new_arrival_en||t('new'))}
 function shop(){const list=state.category==='all'?state.products:state.products.filter(p=>p.category===state.category),hero=state.language==='km'?state.settings.hero_km:state.settings.hero_en,heroText=state.language==='km'?state.settings.hero_text_km:state.settings.hero_text_en;return `<section class="hero"><div class="hero-main"><div class="eyebrow">${t('heroTag')}</div><h1>${hero}</h1><p>${heroText}</p></div><div class="hero-side"><strong>${newArrivalText()}</strong></div></section>${customerActions()}<div class="section-head"><h2>${t('featured')}</h2><small>${list.length} ${t('items')}</small></div><div class="filters">${['all','clothes','bags','charms'].map(x=>`<button class="filter ${state.category===x?'selected':''}" onclick="setCategory('${x}')">${t(x)}</button>`).join('')}</div><div class="products product-showcase-list">${list.length?list.map(p=>`<article class="product product-showcase"><button class="product-image product-image-button" onclick="showProduct('${p.id}')">${image(p)}</button><div class="showcase-info"><div class="showcase-footer"><h3 class="showcase-name"><button class="title-button" onclick="showProduct('${p.id}')">${productName(p)}</button></h3><div class="showcase-price">${money(p.price)}</div></div></div></article>`).join(''):`<div class="empty">${t('noProducts')}</div>`}</div><button class="cart" onclick="showCart()">${t('bag')} · ${state.cart.reduce((n,x)=>n+x.qty,0)}</button>`}
 function settingsAdmin(){const fees=Object.entries(state.settings.shipping||{}).map(([k,v])=>`<div class="settings-row"><span>${k}</span><label>$ <input name="fee-${k}" value="${String(v).replace('$','')}"></label></div>`).join('');return `<div class="panel"><h2>${t('homeTitle')}</h2><form id="settings-form" onsubmit="saveSettings(event)"><label class="field">English headline<input name="hero_en" value="${state.settings.hero_en||''}"></label><label class="field">Khmer headline<input name="hero_km" value="${state.settings.hero_km||''}"></label><label class="field">English introduction<textarea name="hero_text_en">${state.settings.hero_text_en||''}</textarea></label><label class="field">Khmer introduction<textarea name="hero_text_km">${state.settings.hero_text_km||''}</textarea></label><label class="field">New-arrival text (English)<input name="new_arrival_en" value="${state.settings.new_arrival_en||'New arrival'}"></label><label class="field">New-arrival text (Khmer)<input name="new_arrival_km" value="${state.settings.new_arrival_km||'ទំនិញថ្មី'}"></label><label class="field">${t('pickupAddress')}<input name="pickup" value="${state.settings.pickup||''}"></label><h3>${t('shippingFees')}</h3>${fees}<label class="field">${t('freeShippingThreshold')}<input name="free_shipping_threshold" type="number" min="0" step="0.01" value="${shippingThreshold()||''}"><small>Enter 0 to turn off free delivery.</small></label><button class="primary">${t('save')}</button></form></div><div class="panel"><h2>${t('proofAlerts')}</h2><p class="description">${t('proofAlertsHint')}</p><button type="button" class="primary" onclick="connectTelegramOwner()">${t('connectTelegram')}</button></div>`}
+
+// Page memory: preserve the exact page state and scroll position when returning.
+// This is kept in sessionStorage so it also survives Telegram Mini App view pauses.
+if(!window.__cypressPageMemoryEnabled){
+  window.__cypressPageMemoryEnabled=true;
+  const baseRender=render;
+  state.pageMemory=state.pageMemory||{};
+  state.pageTrail=state.pageTrail||[];
+  state.restoreScroll=null;
+  const pageFields='input:not([type="file"]):not([type="password"]), textarea, select';
+  const stateKeys=['view','category','productId','adminTab','manageFilter','manageSearch','manageSort','manageSalesId','editId','delivery','region'];
+  function pageSnapshot(){
+    const snap={};stateKeys.forEach(key=>snap[key]=state[key]);
+    snap.selectedVariants=JSON.parse(JSON.stringify(state.selectedVariants||{}));
+    snap.scrollY=window.scrollY||window.pageYOffset||0;
+    snap.forms={};
+    document.querySelectorAll(pageFields).forEach((field,index)=>{
+      const key=field.id||field.name||`field-${index}`;
+      if(field.type==='checkbox'||field.type==='radio')snap.forms[key]={checked:field.checked,value:field.value};
+      else snap.forms[key]={value:field.value};
+    });
+    return snap;
+  }
+  function pageKey(s=state){return [s.view||'shop',s.productId||'',s.adminTab||'',s.manageSalesId||'',s.category||'',s.manageFilter||'',s.manageSearch||'',s.manageSort||'',s.editId||''].join('|')}
+  function storeCurrentPage(){
+    const snap=pageSnapshot();
+    state.pageMemory[pageKey(snap)]=snap;
+    try{sessionStorage.setItem('cypress-page-memory',JSON.stringify(state.pageMemory))}catch{}
+    return snap;
+  }
+  function applySnapshot(snap){
+    if(!snap)return;
+    stateKeys.forEach(key=>{if(Object.hasOwn(snap,key))state[key]=snap[key]});
+    state.selectedVariants=JSON.parse(JSON.stringify(snap.selectedVariants||{}));
+    state.restoreScroll=snap;
+  }
+  function restorePage(snap){
+    if(!snap)return;
+    document.querySelectorAll(pageFields).forEach((field,index)=>{
+      const key=field.id||field.name||`field-${index}`,saved=snap.forms?.[key];
+      if(!saved)return;
+      if(field.type==='checkbox'||field.type==='radio')field.checked=Boolean(saved.checked);
+      else field.value=saved.value??'';
+    });
+    const move=()=>window.scrollTo({top:Math.max(0,Number(snap.scrollY)||0),left:0,behavior:'auto'});
+    requestAnimationFrame(()=>{move();requestAnimationFrame(move)});
+    // Images can finish loading after the DOM is rendered; restore once more then.
+    document.querySelectorAll('img').forEach(img=>{if(!img.complete)img.addEventListener('load',move,{once:true})});
+  }
+  render=function(options={}){
+    const restore=options.restore===false?null:(state.restoreScroll||state.pageMemory[pageKey()]);
+    state.restoreScroll=null;
+    baseRender();
+    if(restore)restorePage(restore);
+  };
+  function pushHistory(snap){
+    try{history.replaceState({cypressPage:storeCurrentPage()},'',location.href);history.pushState({cypressPage:snap},'',location.href)}catch{}
+  }
+  function navigate(next){
+    const leaving=storeCurrentPage();
+    state.pageTrail.push(leaving);
+    Object.assign(state,next);
+    const entering=pageSnapshot();entering.scrollY=0;entering.forms={};
+    state.restoreScroll=entering;
+    pushHistory(entering);
+    render();
+    syncTelegramBackButton();
+  }
+  function goBack(){
+    const previous=state.pageTrail.pop();
+    if(!previous){showHome();return}
+    applySnapshot(previous);
+    render();
+    syncTelegramBackButton();
+  }
+  function showHome(){
+    storeCurrentPage();
+    state.pageTrail=[];state.view='shop';state.productId=null;state.restoreScroll={scrollY:0,forms:{}};
+    render();syncTelegramBackButton();
+  }
+  function syncTelegramBackButton(){
+    const button=window.Telegram?.WebApp?.BackButton;if(!button)return;
+    state.pageTrail.length?button.show():button.hide();
+  }
+  window.addEventListener('popstate',event=>{
+    const snap=event.state?.cypressPage;
+    if(snap){applySnapshot(snap);render();syncTelegramBackButton()}
+  });
+  try{const stored=JSON.parse(sessionStorage.getItem('cypress-page-memory')||'{}');if(stored&&typeof stored==='object')state.pageMemory=stored}catch{}
+  try{history.replaceState({cypressPage:pageSnapshot()},'',location.href)}catch{}
+  const telegramBack=window.Telegram?.WebApp?.BackButton;
+  if(telegramBack){telegramBack.onClick(()=>{if(state.pageTrail.length)goBack();else showHome()});syncTelegramBackButton()}
+
+  // Forward actions create a return point. Home buttons intentionally reset to the top.
+  showShop=showHome;
+  showCart=()=>navigate({view:'cart'});
+  showProduct=id=>navigate({view:'detail',productId:id});
+  showAdmin=async()=>{navigate({view:'admin'});if(key()){await loadAdmin();render()}};
+  showMyOrders=async()=>{navigate({view:'my-orders',myOrdersLoading:true,myOrdersError:''});try{const response=await fetch('/api/my-orders',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({telegramInitData:window.Telegram?.WebApp?.initData||''})}),data=await response.json().catch(()=>({}));if(!response.ok)throw Error(data.error||t('openInTelegram'));state.myOrders=Array.isArray(data.orders)?data.orders:[]}catch(error){state.myOrders=[];state.myOrdersError=error.message||t('openInTelegram')}finally{state.myOrdersLoading=false;render()}};
+  setCategory=value=>{storeCurrentPage();state.category=value;state.restoreScroll={scrollY:0,forms:{}};render()};
+  setLanguage=()=>{storeCurrentPage();state.language=state.language==='en'?'km':'en';save();render()};
+  adminTab=async tab=>{storeCurrentPage();state.adminTab=tab;state.restoreScroll=state.pageMemory[pageKey()]||{scrollY:0,forms:{}};render();if(key()){await loadAdmin();render()}};
+  openSales=id=>navigate({view:'admin',adminTab:'inventory',manageSalesId:id});
+  closeSales=goBack;
+  beginEdit=id=>navigate({view:'admin',adminTab:'products',editId:id});
+  cancelEdit=goBack;
+  // Every rendered back button now uses the same state-restoring route.
+  window.goBack=goBack;
+  window.__cypressRestoreBack=goBack;
+  const originalDetail=productDetail,originalCart=cart,originalMyOrders=myOrdersPage;
+  productDetail=()=>String(originalDetail()).replace(/onclick="showShop\(\)"/,`onclick="goBack()"`);
+  cart=()=>String(originalCart()).replace(/onclick="showShop\(\)"/,`onclick="goBack()"`);
+  myOrdersPage=()=>String(originalMyOrders()).replaceAll('onclick="showShop()"','onclick="goBack()"');
+  // Older compatibility code schedules its final page functions in a microtask.
+  // Run after that queue, so every product/cart/order back button uses the page
+  // memory route rather than the normal Home action.
+  setTimeout(()=>{
+    const finalDetail=productDetail,finalCart=cart,finalOrders=myOrdersPage;
+    productDetail=()=>String(finalDetail()).replace(/onclick="showShop\(\)"/,`onclick="goBack()"`);
+    cart=()=>String(finalCart()).replace(/onclick="showShop\(\)"/,`onclick="goBack()"`);
+    myOrdersPage=()=>String(finalOrders()).replaceAll('onclick="showShop()"','onclick="goBack()"');
+  });
+}
 async function connectTelegramOwner(){try{const telegramInitData=window.Telegram?.WebApp?.initData||'';const result=await adminFetch('/api/admin/telegram-owner',{method:'POST',body:JSON.stringify({telegramInitData})});alert(result.message)}catch(error){alert(error.message)}}
 async function adminTab(tab){const hasKey=Boolean(key());state.adminTab=tab;render();if(!hasKey){alert('Enter the admin key, then tap this tab again.');return}await loadAdmin();render()}
 copy.en.myOrders='My orders';copy.en.orderHistory='My orders';copy.en.noOrders='You have no orders yet.';copy.en.openInTelegram='Open the store inside Telegram to view your orders.';copy.en.status_awaiting_payment='Waiting for payment';copy.en.status_paid='Payment confirmed';copy.en.status_shipping='On the way';copy.en.status_ready_for_pickup='Ready for pickup';copy.en.status_completed='Completed';copy.en.status_cancelled='Cancelled';
