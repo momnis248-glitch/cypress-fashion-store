@@ -33,6 +33,7 @@ create table if not exists public.products (
   sale_type text not null default 'preorder' check (sale_type in ('in_stock', 'preorder')),
   stock_by_sku jsonb not null default '{}'::jsonb,
   sold_by_sku jsonb not null default '{}'::jsonb,
+  variant_sale_types jsonb not null default '{}'::jsonb,
   excludes_charms boolean not null default false,
   image_url text not null,
   image_urls text[] not null default '{}',
