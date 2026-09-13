@@ -98,7 +98,7 @@ async function publishProductToChannel(product) {
     photo: product.image_url,
     caption,
     reply_markup: { inline_keyboard: [[{
-      text: '🛒 查看商品详情 / មើលព័ត៌មាន',
+      text: '🛒 View Product / 查看商品',
       url: `https://t.me/${bot}?startapp=product_${product.id}`
     }]] }
   });
