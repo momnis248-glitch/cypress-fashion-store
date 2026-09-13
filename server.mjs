@@ -239,6 +239,15 @@ const server = createServer(async (req, res) => {
       await notifyOrderStatus(saved[0]).catch(error => console.error(error.message));
       return sendJson(res, 200, saved[0]);
     }
+    if (req.method === 'DELETE' && /^\/api\/admin\/orders\/[\w-]+$/.test(url.pathname)) {
+      if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
+      const id = url.pathname.split('/').pop();
+      // Cancel first so a payment-confirmed in-stock order returns its stock and
+      // its sales data no longer appears before the record is permanently removed.
+      await db('rpc/cancel_order_safely', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ p_order_id: id }) });
+      await db(`orders?id=eq.${id}`, { method: 'DELETE' });
+      return sendJson(res, 204, {});
+    }
     if (req.method === 'GET' && url.pathname === '/api/store') { const [settings, products] = await Promise.all([db('store_settings?select=*&id=eq.1'), db('products?select=*&published=eq.true&order=created_at.desc')]); return sendJson(res, 200, { settings: settings?.[0] || defaults, products: products || [] }); }
     if (req.method === 'GET' && url.pathname === '/api/admin/store') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const [settings, products, orders] = await Promise.all([db('store_settings?select=*&id=eq.1'), db('products?select=*&order=created_at.desc'), db('orders?select=*&order=created_at.desc&limit=500')]); return sendJson(res, 200, { settings: settings?.[0] || defaults, products: products || [], orders: orders || [] }); }
     if (req.method === 'PUT' && url.pathname === '/api/admin/settings') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req); const free_shipping_threshold = Number(input.free_shipping_threshold); const settings = { id: 1, ...defaults, ...input, pickup: String(input.pickup || '').trim(), shipping: input.shipping || defaults.shipping, default_delivery_notes: cleanDeliveryNotes(input.default_delivery_notes || defaults.default_delivery_notes), free_shipping_threshold: Number.isFinite(free_shipping_threshold) && free_shipping_threshold >= 0 ? free_shipping_threshold : defaults.free_shipping_threshold }; if (!settings.pickup) return sendJson(res, 400, { error: 'Pickup address is required.' }); await db('store_settings?id=eq.1', { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(settings) }); return sendJson(res, 200, settings); }
