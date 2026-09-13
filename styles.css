@@ -182,3 +182,20 @@ button{cursor:pointer;border:0}
   .shipping-badge span{font-size:7px}
   .showcase-price{font-size:19px;letter-spacing:-.02em}
 }
+.admin-subhead{display:block;margin:14px 0 8px;font-size:14px}
+.admin-variant-fields{display:grid;gap:10px;margin:0 0 16px}
+.size-guide-admin{margin:0;padding:12px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.size-guide-admin legend{padding:0 6px;color:var(--accent);font-weight:700}
+.size-guide-admin .field{margin:7px 0 0}
+.color-image-admin{display:grid;grid-template-columns:auto auto 58px 1fr;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--line);border-radius:10px;background:#fff;font-size:13px;font-weight:700}
+.color-image-admin>img{width:58px;height:58px;object-fit:cover;border-radius:7px;background:#eee8e0}
+.color-image-admin input{min-width:0;font-size:12px}
+.color-image-admin small{grid-column:4;color:var(--muted);font-weight:500}
+.variant-color-photo{width:28px;height:28px;object-fit:cover;border-radius:5px;background:#eee8e0}
+.customer-size-guide{display:flex;flex-wrap:wrap;gap:8px 14px;margin-top:10px;padding:11px 12px;border-radius:9px;background:#f1efeb;color:var(--muted);font-size:13px;line-height:1.45}
+.customer-size-guide b{color:var(--ink)}
+@media(max-width:700px){
+  .color-image-admin{grid-template-columns:auto auto 46px 1fr}
+  .color-image-admin>img{width:46px;height:46px}
+  .color-image-admin small{grid-column:1/-1}
+}
