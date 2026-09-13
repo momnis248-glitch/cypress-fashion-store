@@ -2,7 +2,8 @@
 alter table public.products
   add column if not exists sale_type text not null default 'preorder' check (sale_type in ('in_stock', 'preorder')),
   add column if not exists stock_by_sku jsonb not null default '{}'::jsonb,
-  add column if not exists sold_by_sku jsonb not null default '{}'::jsonb;
+  add column if not exists sold_by_sku jsonb not null default '{}'::jsonb,
+  add column if not exists variant_sale_types jsonb not null default '{}'::jsonb;
 
 -- Existing products remain purchasable as pre-orders until you change them in Admin.
 update public.products set sale_type = 'preorder' where sale_type is null;
@@ -25,7 +26,7 @@ begin
   for item in select value from jsonb_array_elements(coalesce(p_order->'items', '[]'::jsonb)) loop
     select * into product_row from public.products where id = (item->>'id')::uuid for update;
     if not found then raise exception 'A product is no longer available.'; end if;
-    if product_row.sale_type = 'in_stock' then
+    if coalesce(product_row.variant_sale_types->>coalesce(nullif(item->>'sku', ''), 'default'), product_row.sale_type, 'preorder') = 'in_stock' then
       sku := coalesce(nullif(item->>'sku', ''), 'default');
       requested := greatest(1, coalesce((item->>'quantity')::integer, 0));
       remaining := coalesce((product_row.stock_by_sku->>sku)::integer, 0);
