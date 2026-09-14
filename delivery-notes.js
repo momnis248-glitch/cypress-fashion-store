@@ -51,6 +51,7 @@ async function saveDeliverySettings(event){
   event.preventDefault();const form=event.currentTarget,data=Object.fromEntries(new FormData(form));
   data.shipping={};Object.keys(state.settings.shipping||{}).forEach(region=>{data.shipping[region]='$'+Number(data[`fee-${region}`]||0).toFixed(2);delete data[`fee-${region}`]});
   data.default_delivery_notes={en:form.default_delivery_notes_en.value.trim(),km:form.default_delivery_notes_km.value.trim()};
+  delete data.default_delivery_notes_en;delete data.default_delivery_notes_km;
   try{const saved=await adminFetch('/api/admin/settings',{method:'PUT',body:JSON.stringify(data)});state.settings=saved||data;render();showAdminSuccess('默认配送说明已保存 ✓')}catch(error){alert(error.message)}
 }
 
