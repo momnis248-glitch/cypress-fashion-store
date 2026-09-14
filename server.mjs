@@ -263,7 +263,30 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'GET' && url.pathname === '/api/store') { const [settings, products] = await Promise.all([db('store_settings?select=*&id=eq.1'), db('products?select=*&published=eq.true&order=created_at.desc')]); return sendJson(res, 200, { settings: settings?.[0] || defaults, products: products || [] }); }
     if (req.method === 'GET' && url.pathname === '/api/admin/store') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const [settings, products, orders] = await Promise.all([db('store_settings?select=*&id=eq.1'), db('products?select=*&order=created_at.desc'), db('orders?select=*&order=created_at.desc&limit=500')]); return sendJson(res, 200, { settings: settings?.[0] || defaults, products: products || [], orders: orders || [] }); }
-    if (req.method === 'PUT' && url.pathname === '/api/admin/settings') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req); const free_shipping_threshold = Number(input.free_shipping_threshold); const settings = { id: 1, ...defaults, ...input, pickup: String(input.pickup || '').trim(), shipping: input.shipping || defaults.shipping, default_delivery_notes: cleanDeliveryNotes(input.default_delivery_notes || defaults.default_delivery_notes), free_shipping_threshold: Number.isFinite(free_shipping_threshold) && free_shipping_threshold >= 0 ? free_shipping_threshold : defaults.free_shipping_threshold }; if (!settings.pickup) return sendJson(res, 400, { error: 'Pickup address is required.' }); await db('store_settings?id=eq.1', { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'resolution=merge-duplicates,return=representation' }, body: JSON.stringify(settings) }); return sendJson(res, 200, settings); }
+    if (req.method === 'PUT' && url.pathname === '/api/admin/settings') {
+      if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
+      const input = await readBody(req);
+      const current = (await db('store_settings?select=*&id=eq.1'))?.[0] || defaults;
+      const text = (key) => typeof input[key] === 'string' ? input[key].trim() : String(current[key] ?? defaults[key] ?? '').trim();
+      const requestedShipping = plainObject(input.shipping);
+      const currentShipping = plainObject(current.shipping);
+      const freeShippingInput = input.free_shipping_threshold === undefined ? Number(current.free_shipping_threshold ?? defaults.free_shipping_threshold) : Number(input.free_shipping_threshold);
+      const settings = {
+        pickup: text('pickup'),
+        shipping: Object.keys(requestedShipping).length ? requestedShipping : (Object.keys(currentShipping).length ? currentShipping : defaults.shipping),
+        free_shipping_threshold: Number.isFinite(freeShippingInput) && freeShippingInput >= 0 ? freeShippingInput : Number(defaults.free_shipping_threshold || 0),
+        hero_en: text('hero_en'),
+        hero_km: text('hero_km'),
+        hero_text_en: text('hero_text_en'),
+        hero_text_km: text('hero_text_km'),
+        new_arrival_en: text('new_arrival_en'),
+        new_arrival_km: text('new_arrival_km'),
+        default_delivery_notes: cleanDeliveryNotes(input.default_delivery_notes ?? current.default_delivery_notes ?? defaults.default_delivery_notes)
+      };
+      if (!settings.pickup) return sendJson(res, 400, { error: 'Pickup address is required.' });
+      const saved = await db('store_settings?id=eq.1', { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(settings) });
+      return sendJson(res, 200, saved?.[0] || { ...current, ...settings });
+    }
     if (req.method === 'POST' && url.pathname === '/api/admin/telegram-owner') { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req), user = verifyTelegramInitData(input.telegramInitData); if (!user?.id) return sendJson(res, 400, { error: 'Open Admin from the Telegram Mini App before connecting this account.' }); await db('store_settings?id=eq.1', { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ owner_telegram_chat_id: String(user.id) }) }); await ensureTelegramWebhook().catch(error => console.error(error.message)); return sendJson(res, 200, { message: 'This Telegram account will receive payment screenshots.' }); }
     if (req.method === 'PATCH' && /^\/api\/admin\/inventory\/[\w-]+$/.test(url.pathname)) { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const input = await readBody(req), stock_by_sku = cleanStock(input.stock_by_sku), id = url.pathname.split('/').pop(); const saved = await db(`products?id=eq.${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ stock_by_sku }) }); if (!saved?.[0]) return sendJson(res, 404, { error: 'Product was not found.' }); return sendJson(res, 200, saved[0]); }
     if (req.method === 'PATCH' && /^\/api\/admin\/products\/[\w-]+\/publish$/.test(url.pathname)) { if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' }); const { published } = await readBody(req), id = url.pathname.split('/')[4]; const saved = await db(`products?id=eq.${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify({ published: published === true }) }); const product = saved?.[0]; if (product?.published) await publishProductToChannel(product).catch(error => console.error(`Channel product post failed: ${error.message}`)); return sendJson(res, 200, product); }
