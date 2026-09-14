@@ -11,6 +11,8 @@
   const languageIsKhmer = () => state.language === 'km';
   const typeLabel = (type) => languageIsKhmer() ? (type === 'in_stock' ? 'មានស្តុក' : 'បញ្ជាទិញមុន') : (type === 'in_stock' ? 'IN STOCK' : 'PRE-ORDER');
   const deliveryText = item => {
+    const custom = String(item.delivery_notes?.[languageIsKhmer() ? 'km' : 'en'] || '').trim();
+    if (custom) return esc(custom).replace(/\n/g, '<br>');
     if (languageIsKhmer()) return `ដឹកជញ្ជូន · 3–4 ថ្ងៃ<br>មកយកដោយខ្លួនឯង · អាចមកយកបានបន្ទាប់ពីចេញពីធ្វើការនៅថ្ងៃបន្ទាប់<br>${esc(state.settings.pickup || 'National Road No. 4, KM 82, T20 Factory Security Room')}`;
     return item.sale_type === 'preorder' ? 'Pre-order · 15–18 days' : `Delivery · 3–4 days<br>Pickup · Available after work the next day<br>${esc(state.settings.pickup || 'National Road No. 4, KM 82, T20 Factory Security Room')}`;
   };
