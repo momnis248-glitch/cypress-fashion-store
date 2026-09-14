@@ -11,23 +11,35 @@
   const languageIsKhmer = () => state.language === 'km';
   const typeLabel = (type) => languageIsKhmer() ? (type === 'in_stock' ? 'មានស្តុក' : 'បញ្ជាទិញមុន') : (type === 'in_stock' ? 'IN STOCK' : 'PRE-ORDER');
   const deliveryText = item => {
-    const custom = String(item.delivery_notes?.[languageIsKhmer() ? 'km' : 'en'] || '').trim();
-    if (custom) return esc(custom).replace(/\n/g, '<br>');
-    if (languageIsKhmer()) return `ដឹកជញ្ជូន · 3–4 ថ្ងៃ<br>មកយកដោយខ្លួនឯង · អាចមកយកបានបន្ទាប់ពីចេញពីធ្វើការនៅថ្ងៃបន្ទាប់<br>${esc(state.settings.pickup || 'National Road No. 4, KM 82, T20 Factory Security Room')}`;
-    return item.sale_type === 'preorder' ? 'Pre-order · 15–18 days' : `Delivery · 3–4 days<br>Pickup · Available after work the next day<br>${esc(state.settings.pickup || 'National Road No. 4, KM 82, T20 Factory Security Room')}`;
+    const language = languageIsKhmer() ? 'km' : 'en';
+    const fallback = language === 'km'
+      ? 'ទំនិញបញ្ជាទិញមុន (Pre-order): ទទួលបានទំនិញក្នុងរយៈពេល 15–18 ថ្ងៃ បន្ទាប់ពីធ្វើការបញ្ជាទិញ។\nទំនិញមានស្តុក – ដឹកជញ្ជូន: ទទួលបានទំនិញក្នុងរយៈពេល 3–4 ថ្ងៃ។\nមកយកដោយខ្លួនឯង: អាចមកយកបានបន្ទាប់ពីចេញពីធ្វើការនៅថ្ងៃបន្ទាប់។\nទីតាំងមកយក: National Road No. 4, KM 82, T20 Factory Security Room'
+      : 'Pre-order: Delivery in 15–18 days after placing the order.\nIn Stock – Delivery: Delivery in 3–4 days.\nSelf-Pickup: Available after work the next day.\nPickup Location: National Road No. 4, KM 82, T20 Factory Security Room';
+    const raw = String(item.delivery_notes?.[language] || state.settings.default_delivery_notes?.[language] || fallback).trim();
+    return esc(raw).replace(/^(Pre-order:|In Stock – Delivery:|Self-Pickup:|Pickup Location:)/gm, '<strong>$1</strong>').replace(/\n/g, '<br>');
   };
   const mediaItems = item => {
     const images = gallery(item);
     if (!images.length) return [];
     return [{ kind: 'image', url: images[0] }, ...(item.video_url ? [{ kind: 'video', url: item.video_url }] : []), ...images.slice(1).map(url => ({ kind: 'image', url }))];
   };
-  const carouselHtml = item => {
+  const preloadNeighbour = (item, current) => {
+    const next = mediaItems(item)[(current + 1) % mediaItems(item).length];
+    if (next?.kind === 'image') { const image = new Image(); image.src = next.url; }
+  };
+  const activateCarouselMedia = item => {
+    const media = mediaItems(item), current = state.productCarouselIndex?.[item.id] || 0;
+    preloadNeighbour(item, current);
+    const video = document.querySelector('#product-media-carousel video');
+    if (video) { video.muted = true; video.play().catch(() => {}); }
+  };
+  const carouselHtml = (item, direction = '') => {
     const media = mediaItems(item), indexMap = state.productCarouselIndex || (state.productCarouselIndex = {}), current = Math.min(indexMap[item.id] || 0, Math.max(0, media.length - 1)), active = media[current];
     if (!active) return '<div class="product-carousel empty-media">No product image</div>';
     const asset = active.kind === 'video'
-      ? `<video controls playsinline preload="metadata" muted src="${esc(active.url)}"></video><span class="video-chip">▶ Video</span>`
+      ? `<video controls playsinline preload="metadata" muted loop src="${esc(active.url)}"></video><span class="video-chip">▶ Video</span>`
       : `<img src="${esc(active.url)}" alt="${esc(productName(item))}" loading="eager">`;
-    return `<div id="product-media-carousel" class="product-carousel" ontouchstart="carouselTouchStart(event,'${item.id}')" ontouchend="carouselTouchEnd(event,'${item.id}')">${asset}${media.length > 1 ? `<button class="carousel-arrow previous" aria-label="Previous" onclick="moveCarousel('${item.id}',-1)">‹</button><button class="carousel-arrow next" aria-label="Next" onclick="moveCarousel('${item.id}',1)">›</button><span class="carousel-count">${current + 1}/${media.length}</span>` : ''}</div>`;
+    return `<div id="product-media-carousel" class="product-carousel ${direction ? `carousel-swipe-${direction}` : ''}" ontouchstart="carouselTouchStart(event,'${item.id}')" ontouchend="carouselTouchEnd(event,'${item.id}')"><button class="carousel-back" aria-label="Back" onclick="goBack()">←</button>${asset}${media.length > 1 ? `<button class="carousel-arrow previous" aria-label="Previous" onclick="moveCarousel('${item.id}',-1)">‹</button><button class="carousel-arrow next" aria-label="Next" onclick="moveCarousel('${item.id}',1)">›</button><span class="carousel-count">${current + 1}/${media.length}</span>` : ''}</div>`;
   };
   window.moveCarousel = (id, direction) => {
     const item = product(id); if (!item) return;
@@ -35,11 +47,11 @@
     const media = mediaItems(item), map = state.productCarouselIndex || (state.productCarouselIndex = {});
     map[id] = (Math.max(0, map[id] || 0) + direction + media.length) % media.length;
     const target = document.querySelector('#product-media-carousel');
-    if (target) target.outerHTML = carouselHtml(item);
+    if (target) { target.outerHTML = carouselHtml(item, direction > 0 ? 'next' : 'previous'); activateCarouselMedia(item); }
   };
   let touchX = null;
   window.carouselTouchStart = event => { touchX = event.changedTouches?.[0]?.clientX ?? null; };
-  window.carouselTouchEnd = (event, id) => { const x = event.changedTouches?.[0]?.clientX; if (touchX !== null && Math.abs(x - touchX) > 40) window.moveCarousel(id, x < touchX ? 1 : -1); touchX = null; };
+  window.carouselTouchEnd = (event, id) => { const x = event.changedTouches?.[0]?.clientX; if (touchX !== null && Math.abs(x - touchX) > 28) window.moveCarousel(id, x < touchX ? 1 : -1); touchX = null; };
 
   const optionType = (item, size, color) => variantType(item, size, color);
   const optionStock = (item, size, color) => variantStock(item, size, color);
@@ -72,7 +84,7 @@
   const mediaProductDetail = () => {
     const item = product(state.productId); if (!item) return `<section class="panel"><p>This product is currently unavailable.</p><button class="back home-return" onclick="showShop()">Continue Shopping</button></section>`;
     const type = optionType(item, '', ''), brief = languageIsKhmer() ? item.description_km : item.description_en;
-    return `<section class="product-detail product-detail-media"><button class="back home-return detail-back" onclick="showShop()">${t('backToShop')}</button>${carouselHtml(item)}<div class="detail-media-info"><h2>${esc(productName(item))}</h2>${brief ? `<p class="product-brief">${esc(brief)}</p>` : ''}<div class="detail-price-row">${variantSaleBadge(type)}<strong>${money(item.price)}</strong></div><div class="delivery-mini"><b>${languageIsKhmer() ? 'ការដឹកជញ្ជូន' : 'Delivery information'}</b><span>${deliveryText(item)}</span></div>${item.category === 'bags' && item.excludes_charms ? `<p class="bag-charms-note">${t('excludesCharms')}</p>` : ''}</div><div class="detail-bottom-spacer"></div><nav class="product-action-bar"><button class="product-cart-icon" aria-label="Cart" onclick="showCart()">🛒${itemCount() ? `<i>${itemCount()}</i>` : ''}</button><button class="secondary action-add" onclick="openProductOptions('${item.id}','cart')">Add to Cart</button><button class="primary action-buy" onclick="openProductOptions('${item.id}','buy')">Buy Now</button></nav></section>`;
+    return `<section class="product-detail product-detail-media">${carouselHtml(item)}<div class="detail-media-info"><h2>${esc(productName(item))}</h2>${brief ? `<p class="product-brief">${esc(brief)}</p>` : ''}<div class="detail-price-row">${variantSaleBadge(type)}<strong>${money(item.price)}</strong></div><div class="delivery-mini"><b>${languageIsKhmer() ? 'ការដឹកជញ្ជូន' : 'Delivery Information'}</b><span>${deliveryText(item)}</span></div>${item.category === 'bags' && item.excludes_charms ? `<p class="bag-charms-note">${t('excludesCharms')}</p>` : ''}</div><div class="detail-bottom-spacer"></div><nav class="product-action-bar"><button class="product-cart-icon" aria-label="Cart" onclick="showCart()">🛒${itemCount() ? `<i>${itemCount()}</i>` : ''}</button><button class="secondary action-add" onclick="openProductOptions('${item.id}','cart')">Add to Cart</button><button class="primary action-buy" onclick="openProductOptions('${item.id}','buy')">Buy Now</button></nav></section>`;
   };
 
   const directCheckout = () => {
@@ -105,7 +117,8 @@
   };
 
   setTimeout(() => {
-    const baseCart = cart, baseRequest = requestQR, baseProductAdmin = productAdmin;
+    const baseCart = cart, baseRequest = requestQR, baseProductAdmin = productAdmin, baseRender = render;
+    render = () => { document.body.classList.toggle('detail-immersive', state.view === 'detail'); baseRender(); if (state.view === 'detail') requestAnimationFrame(() => { const item = product(state.productId); if (item) activateCarouselMedia(item); }); };
     productDetail = mediaProductDetail;
     cart = () => state.buyNowItem ? directCheckout() : baseCart();
     requestQR = async () => {
