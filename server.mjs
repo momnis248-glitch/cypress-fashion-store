@@ -131,6 +131,17 @@ async function publishProductToChannel(product) {
       url: `https://t.me/${bot}?startapp=product_${product.id}`
     }]] }
   });
+  // Keep the primary photo and the optional product video as two clear posts.
+  // This preserves the View Product button on the photo while still giving the
+  // channel a native, playable video immediately below it.
+  if (product.video_url) {
+    await telegramApi('sendVideo', {
+      chat_id: channel,
+      video: product.video_url,
+      supports_streaming: true,
+      caption: `🎬 ${product.name_en || 'Product video'}\n${product.name_km || ''}`.trim().slice(0, 1024)
+    });
+  }
 }
 async function uploadProductImage(dataUrl) {
   const match = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)$/.exec(dataUrl || ''); if (!match) throw Error('Use a PNG, JPG, or WebP image.');
