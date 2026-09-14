@@ -198,6 +198,10 @@ async function productImages(input) {
   const existing = Array.isArray(input.image_urls) ? input.image_urls : [];
   return existing.filter(Boolean).slice(0, 8).concat(existing.length ? [] : [String(input.image_url || '')]).filter(Boolean).slice(0, 8);
 }
+async function detailPageImages(input) {
+  const uploads = Array.isArray(input.detailPageImageDataList) ? input.detailPageImageDataList.filter(Boolean).slice(0, 20) : [];
+  return uploads.length ? Promise.all(uploads.map(uploadProductImage)) : [];
+}
 function productInput(input) { const name_en = String(input.name_en || '').trim(), price = Number(input.price), category = ['clothes', 'bags', 'charms'].includes(input.category) ? input.category : 'clothes', requestedSizes = Array.isArray(input.sizes) ? input.sizes : String(input.sizes || '').split(','), requestedColors = Array.isArray(input.colors) ? input.colors : String(input.colors || '').split(','), sizes = category === 'clothes' ? requestedSizes.map(size => String(size).trim()).filter(Boolean).slice(0, 20) : [], colors = requestedColors.map(color => String(color).trim()).filter(Boolean).slice(0, 30); if (!name_en || !Number.isFinite(price) || price < 0) throw Error('Product name and price are required.'); return { name_en, name_km: String(input.name_km || '').trim(), description_en: String(input.description_en || '').trim(), description_km: String(input.description_km || '').trim(), category, price, sizes, colors, size_guides: cleanSizeGuides(input.size_guides, sizes), color_images: keptColorImages(input.color_images, colors), excludes_charms: category === 'bags' && input.excludes_charms === true, published: input.published !== false, featured: input.featured === true }; }
 
 function inventoryKey(item) { const color = String(item?.color || '').trim(), size = String(item?.size || '').trim(); return [color && `color:${color}`, size && `size:${size}`].filter(Boolean).join('|') || 'default'; }
@@ -325,7 +329,7 @@ const server = createServer(async (req, res) => {
       if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
       const input = await readBody(req), item = productInput(input), images = await productImages(input);
       item.image_url = images[0] || String(input.image_url || ''); item.image_urls = images.length ? images : (item.image_url ? [item.image_url] : []); item.detail_image_url = item.image_urls[1] || item.image_url;
-      item.video_url = input.videoData ? await uploadProductVideo(input.videoData) : String(input.video_url || ''); item.color_images = await productColorImages(input.colorImageData, item.colors, item.color_images);
+      item.video_url = input.videoData ? await uploadProductVideo(input.videoData) : String(input.video_url || ''); item.detail_image_urls = await detailPageImages(input); item.color_images = await productColorImages(input.colorImageData, item.colors, item.color_images);
       if (!item.image_url) return sendJson(res, 400, { error: 'A main product image is required.' });
       const saved = await db('products', { method: 'POST', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(item) }); const product = saved?.[0];
       let channel = { sent: false, skipped: true }; if (input.send_to_channel === true) { try { await publishProductToChannel(product); channel = { sent: true }; } catch (error) { channel = { sent: false, error: error.message }; } }
@@ -336,7 +340,8 @@ const server = createServer(async (req, res) => {
       const input = await readBody(req), item = productInput(input), uploaded = await productImages(input), previous = Array.isArray(input.image_urls) ? input.image_urls.filter(Boolean).slice(0, 8) : [];
       const images = input.mainImageData ? uploaded : (uploaded.length ? [...previous, ...uploaded].slice(0, 8) : previous);
       item.image_url = images[0] || String(input.image_url || ''); item.image_urls = images.length ? images : (item.image_url ? [item.image_url] : []); item.detail_image_url = item.image_urls[1] || item.image_url;
-      item.video_url = input.videoData ? await uploadProductVideo(input.videoData) : String(input.video_url || ''); item.color_images = await productColorImages(input.colorImageData, item.colors, item.color_images);
+      item.video_url = input.videoData ? await uploadProductVideo(input.videoData) : String(input.video_url || ''); const detailUploads = await detailPageImages(input), previousDetails = Array.isArray(input.detail_image_urls) ? input.detail_image_urls.filter(Boolean).slice(0, 20) : [];
+      item.detail_image_urls = detailUploads.length ? [...previousDetails, ...detailUploads].slice(0, 20) : previousDetails; item.color_images = await productColorImages(input.colorImageData, item.colors, item.color_images);
       if (!item.image_url) return sendJson(res, 400, { error: 'A main product image is required.' });
       const saved = await db(`products?id=eq.${url.pathname.split('/').pop()}`, { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(item) }); const product = saved?.[0];
       let channel = { sent: false, skipped: true }; if (input.send_to_channel === true) { try { await publishProductToChannel(product); channel = { sent: true }; } catch (error) { channel = { sent: false, error: error.message }; } }
