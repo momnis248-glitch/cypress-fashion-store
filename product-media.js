@@ -7,6 +7,7 @@
     const urls = [item.image_url, ...(Array.isArray(item.image_urls) ? item.image_urls : [])].filter(Boolean);
     return [...new Set(urls)].slice(0, 8);
   };
+  const detailImages = item => Array.isArray(item?.detail_image_urls) ? item.detail_image_urls.filter(Boolean).slice(0, 20) : [];
   const itemCount = () => state.cart.reduce((count, item) => count + Number(item.qty || 0), 0);
   const languageIsKhmer = () => state.language === 'km';
   const typeLabel = (type) => languageIsKhmer() ? (type === 'in_stock' ? 'មានស្តុក' : 'បញ្ជាទិញមុន') : (type === 'in_stock' ? 'IN STOCK' : 'PRE-ORDER');
@@ -86,7 +87,8 @@
   const mediaProductDetail = () => {
     const item = product(state.productId); if (!item) return `<section class="panel"><p>This product is currently unavailable.</p><button class="back home-return" onclick="showShop()">Continue Shopping</button></section>`;
     const type = optionType(item, '', ''), brief = languageIsKhmer() ? item.description_km : item.description_en;
-    return `<section class="product-detail product-detail-media">${carouselHtml(item)}<div class="detail-media-info"><h2>${esc(productName(item))}</h2>${brief ? `<p class="product-brief">${esc(brief)}</p>` : ''}<div class="detail-price-row">${variantSaleBadge(type)}<strong>${money(item.price)}</strong></div><div class="delivery-mini"><b>${languageIsKhmer() ? 'ការដឹកជញ្ជូន' : 'Delivery Information'}</b><span>${deliveryText(item)}</span></div>${item.category === 'bags' && item.excludes_charms ? `<p class="bag-charms-note">${t('excludesCharms')}</p>` : ''}</div><div class="detail-bottom-spacer"></div><nav class="product-action-bar"><button class="product-cart-icon" aria-label="Cart" onclick="showCart()">🛒${itemCount() ? `<i>${itemCount()}</i>` : ''}</button><button class="secondary action-add" onclick="openProductOptions('${item.id}','cart')">Add to Cart</button><button class="primary action-buy" onclick="openProductOptions('${item.id}','buy')">Buy Now</button></nav></section>`;
+    const longDetail = detailImages(item).length ? `<section class="product-long-details" aria-label="Product details">${detailImages(item).map((url, index) => `<img src="${esc(url)}" alt="${esc(productName(item))} detail ${index + 1}" loading="lazy">`).join('')}</section>` : '';
+    return `<section class="product-detail product-detail-media">${carouselHtml(item)}<div class="detail-media-info"><h2>${esc(productName(item))}</h2>${brief ? `<p class="product-brief">${esc(brief)}</p>` : ''}<div class="detail-price-row">${variantSaleBadge(type)}<strong>${money(item.price)}</strong></div><div class="delivery-mini"><b>${languageIsKhmer() ? 'ការដឹកជញ្ជូន' : 'Delivery Information'}</b><span>${deliveryText(item)}</span></div>${item.category === 'bags' && item.excludes_charms ? `<p class="bag-charms-note">${t('excludesCharms')}</p>` : ''}</div>${longDetail}<div class="detail-bottom-spacer"></div><nav class="product-action-bar"><button class="product-cart-icon" aria-label="Cart" onclick="showCart()">🛒${itemCount() ? `<i>${itemCount()}</i>` : ''}</button><button class="secondary action-add" onclick="openProductOptions('${item.id}','cart')">Add to Cart</button><button class="primary action-buy" onclick="openProductOptions('${item.id}','buy')">Buy Now</button></nav></section>`;
   };
 
   const directCheckout = () => {
@@ -96,14 +98,15 @@
   };
 
   const readFile = file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
-  const mediaAdminFields = editing => `<div class="media-admin"><b>Product media / 商品媒体</b><small>Main image + up to 7 additional images. Video: MP4/WebM, 10 MB maximum.</small><label class="field">Main image (required for new products)<input name="main_photo" type="file" accept="image/png,image/jpeg,image/webp" ${editing ? '' : 'required'}></label><label class="field">Additional images (up to 7)<input name="extra_photos" type="file" multiple accept="image/png,image/jpeg,image/webp"></label><label class="field">Product video (optional, MP4/WebM, max 10 MB)<input name="product_video" type="file" accept="video/mp4,video/webm"></label>${gallery(editing || {}).length ? `<div class="media-existing">Current images: ${gallery(editing).length}${editing.video_url ? ' · Video added' : ''}</div>` : ''}</div>`;
+  const mediaAdminFields = editing => `<div class="media-admin"><b>Product media / 商品媒体</b><small>Main image + up to 7 additional images. Video: MP4/WebM, 10 MB maximum.</small><label class="field">Main image (required for new products)<input name="main_photo" type="file" accept="image/png,image/jpeg,image/webp" ${editing ? '' : 'required'}></label><label class="field">Additional images (up to 7)<input name="extra_photos" type="file" multiple accept="image/png,image/jpeg,image/webp"></label><label class="field">Product video (optional, MP4/WebM, max 10 MB)<input name="product_video" type="file" accept="video/mp4,video/webm"></label>${gallery(editing || {}).length ? `<div class="media-existing">Current carousel images: ${gallery(editing).length}${editing.video_url ? ' · Video added' : ''}</div>` : ''}</div><div class="detail-page-admin"><b>Detail page long images / 商品详情页长图</b><small>Select images in order. They will appear continuously below the product information, from 1 onwards.</small><label class="field">Detail page images (up to 20)<input name="detail_page_photos" type="file" multiple accept="image/png,image/jpeg,image/webp" onchange="previewDetailUploadOrder(this)"></label><div id="detail-upload-order" class="detail-upload-order">${detailImages(editing).length ? `Saved detail images: ${detailImages(editing).length}` : 'No detail images yet.'}</div></div>`;
 
   const saveMediaProduct = async event => {
-    event.preventDefault(); const form = event.currentTarget, editing = state.editId ? product(state.editId) : null, main = form.main_photo?.files?.[0], extras = [...(form.extra_photos?.files || [])], video = form.product_video?.files?.[0];
+    event.preventDefault(); const form = event.currentTarget, editing = state.editId ? product(state.editId) : null, main = form.main_photo?.files?.[0], extras = [...(form.extra_photos?.files || [])], detailPages = [...(form.detail_page_photos?.files || [])], video = form.product_video?.files?.[0];
     if (state.productSaveSending) return;
     if (!editing && !main) { alert('Choose a main product image.'); return; }
     const currentImages = main ? 0 : gallery(editing || {}).length;
     if (extras.length > 7 || currentImages + extras.length > 8) { alert('A product can have at most 8 images in total.'); return; }
+    if (detailPages.length > 20 || detailImages(editing).length + detailPages.length > 20) { alert('A product can have at most 20 detail page images.'); return; }
     if (video && (!['video/mp4','video/webm'].includes(video.type) || video.size > 10 * 1024 * 1024)) { alert('Use an MP4/WebM video smaller than 10 MB.'); return; }
     try {
       state.productSaveSending = true; const sendingToChannel = form.dataset.sendToChannel === 'true'; form.querySelectorAll('button').forEach(button => { button.disabled = true; }); const activeButton = form.querySelector(`[data-product-save="${sendingToChannel ? 'send' : 'only'}"]`); if (activeButton) activeButton.textContent = sendingToChannel ? 'Saving & Sending…' : 'Saving…';
@@ -113,7 +116,7 @@
       input.colors = COLOR_OPTIONS.filter(color => input.color_images[color.value] || input.colorImageData[color.value]).map(color => color.value); input.variant_sale_types = {}; input.stock_by_sku = Object.fromEntries([...form.querySelectorAll('[data-stock-sku]')].map(node => [node.dataset.stockSku, Math.max(0, Math.floor(Number(node.value) || 0))]));
       const pickedSizes = input.sizes.length ? input.sizes : ['']; form.querySelectorAll('[data-variant-type]').forEach(node => { if (!input.colors.includes(node.dataset.variantType)) return; pickedSizes.forEach(size => input.variant_sale_types[stockKey(size, node.dataset.variantType)] = node.value); });
       if (!input.colors.length) input.variant_sale_types.default = 'preorder'; input.sale_type = Object.values(input.variant_sale_types).includes('in_stock') ? 'in_stock' : 'preorder'; input.excludes_charms = Boolean(form.excludes_charms?.checked); input.published = form.published.checked; input.featured = form.featured.checked;
-      input.imageDataList = await Promise.all([main, ...extras].filter(Boolean).map(readFile)); input.image_urls = gallery(editing || {}); input.image_url = editing?.image_url || ''; input.videoData = video ? await readFile(video) : ''; input.video_url = editing?.video_url || '';
+      input.imageDataList = await Promise.all([main, ...extras].filter(Boolean).map(readFile)); input.image_urls = gallery(editing || {}); input.image_url = editing?.image_url || ''; input.detailPageImageDataList = await Promise.all(detailPages.map(readFile)); input.detail_image_urls = detailImages(editing); input.videoData = video ? await readFile(video) : ''; input.video_url = editing?.video_url || '';
       input.delivery_notes = form.use_custom_delivery_notes?.checked ? { en: form.delivery_notes_en?.value.trim() || '', km: form.delivery_notes_km?.value.trim() || '' } : {};
       input.send_to_channel = sendingToChannel;
       const saved = await adminFetch(editing ? `/api/admin/products/${editing.id}` : '/api/admin/products', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(input) });
@@ -157,6 +160,7 @@
       catch (error) { alert(error.message || 'Could not send to channel.'); }
       finally { state.channelRetrySending = false; render(); }
     };
+    window.previewDetailUploadOrder = input => { const target = document.querySelector('#detail-upload-order'); if (target) target.textContent = input.files?.length ? [...input.files].map((file, index) => `${index + 1}. ${file.name}`).join('  ·  ') : 'No new detail images selected.'; };
     saveProduct = saveMediaProduct;
     if (state.view === 'detail') render();
   }, 0);
