@@ -85,7 +85,8 @@
   const saveMediaProduct = async event => {
     event.preventDefault(); const form = event.currentTarget, editing = state.editId ? product(state.editId) : null, main = form.main_photo?.files?.[0], extras = [...(form.extra_photos?.files || [])], video = form.product_video?.files?.[0];
     if (!editing && !main) { alert('Choose a main product image.'); return; }
-    if (extras.length > 7) { alert('Choose no more than 7 additional images.'); return; }
+    const currentImages = main ? 0 : gallery(editing || {}).length;
+    if (extras.length > 7 || currentImages + extras.length > 8) { alert('A product can have at most 8 images in total.'); return; }
     if (video && (!['video/mp4','video/webm'].includes(video.type) || video.size > 10 * 1024 * 1024)) { alert('Use an MP4/WebM video smaller than 10 MB.'); return; }
     try {
       const input = Object.fromEntries(new FormData(form)); input.sizes = [...form.querySelectorAll('input[name="sizes"]:checked')].map(node => node.value); input.size_guides = {};
