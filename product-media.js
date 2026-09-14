@@ -95,7 +95,7 @@
       const pickedSizes = input.sizes.length ? input.sizes : ['']; form.querySelectorAll('[data-variant-type]').forEach(node => { if (!input.colors.includes(node.dataset.variantType)) return; pickedSizes.forEach(size => input.variant_sale_types[stockKey(size, node.dataset.variantType)] = node.value); });
       if (!input.colors.length) input.variant_sale_types.default = 'preorder'; input.sale_type = Object.values(input.variant_sale_types).includes('in_stock') ? 'in_stock' : 'preorder'; input.excludes_charms = Boolean(form.excludes_charms?.checked); input.published = form.published.checked; input.featured = form.featured.checked;
       input.imageDataList = await Promise.all([main, ...extras].filter(Boolean).map(readFile)); input.image_urls = gallery(editing || {}); input.image_url = editing?.image_url || ''; input.videoData = video ? await readFile(video) : ''; input.video_url = editing?.video_url || '';
-      input.delivery_notes = { en: form.delivery_notes_en?.value || editing?.delivery_notes?.en || '', km: form.delivery_notes_km?.value || editing?.delivery_notes?.km || '' };
+      input.delivery_notes = form.use_custom_delivery_notes?.checked ? { en: form.delivery_notes_en?.value.trim() || '', km: form.delivery_notes_km?.value.trim() || '' } : {};
       const saved = await adminFetch(editing ? `/api/admin/products/${editing.id}` : '/api/admin/products', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(input) });
       state.editId = null; await loadAdmin(); render(); showAdminSuccess(editing ? 'Product updated ✓' : 'Product added ✓'); return saved;
     } catch (error) { if (error.message !== 'Cancelled') alert(error.message || 'Could not save product.'); }
