@@ -38,6 +38,7 @@ create table if not exists public.products (
   excludes_charms boolean not null default false,
   image_url text not null,
   image_urls text[] not null default '{}',
+  video_url text not null default '',
   detail_image_url text not null default '',
   delivery_notes jsonb not null default '{}'::jsonb,
   published boolean not null default true,
@@ -73,5 +74,5 @@ grant usage on schema public to service_role;
 grant select, insert, update, delete on table public.store_settings, public.products, public.orders to service_role;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('products', 'products', true, 5242880, array['image/png','image/jpeg','image/webp'])
-on conflict (id) do update set public = true, file_size_limit = 5242880, allowed_mime_types = array['image/png','image/jpeg','image/webp'];
+values ('products', 'products', true, 10485760, array['image/png','image/jpeg','image/webp','video/mp4','video/webm'])
+on conflict (id) do update set public = true, file_size_limit = 10485760, allowed_mime_types = array['image/png','image/jpeg','image/webp','video/mp4','video/webm'];
