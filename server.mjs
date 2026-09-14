@@ -312,7 +312,8 @@ const server = createServer(async (req, res) => {
     }
     if (req.method === 'PATCH' && /^\/api\/admin\/products\/[\w-]+$/.test(url.pathname)) {
       if (!admin(req)) return sendJson(res, 401, { error: 'Unauthorized' });
-      const input = await readBody(req), item = productInput(input), images = await productImages(input);
+      const input = await readBody(req), item = productInput(input), uploaded = await productImages(input), previous = Array.isArray(input.image_urls) ? input.image_urls.filter(Boolean).slice(0, 8) : [];
+      const images = input.mainImageData ? uploaded : (uploaded.length ? [...previous, ...uploaded].slice(0, 8) : previous);
       item.image_url = images[0] || String(input.image_url || ''); item.image_urls = images.length ? images : (item.image_url ? [item.image_url] : []); item.detail_image_url = item.image_urls[1] || item.image_url;
       item.video_url = input.videoData ? await uploadProductVideo(input.videoData) : String(input.video_url || ''); item.color_images = await productColorImages(input.colorImageData, item.colors, item.color_images);
       if (!item.image_url) return sendJson(res, 400, { error: 'A main product image is required.' });
