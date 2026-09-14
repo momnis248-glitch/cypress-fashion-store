@@ -23,6 +23,8 @@ button{cursor:pointer;border:0}
 .filters{display:flex;gap:9px;margin-bottom:18px;overflow:auto}
 .filter{white-space:nowrap;background:var(--card);border:1px solid var(--line);border-radius:100px;padding:9px 16px}
 .filter.selected{background:var(--accent);border-color:var(--accent);color:#fff}
+.filters{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;padding:8px 0 10px;background:var(--paper);box-shadow:0 7px 10px -12px rgba(0,0,0,.55)}
+.filters::-webkit-scrollbar{display:none}
 .products{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
 .product{background:var(--card);border-radius:16px;overflow:hidden;box-shadow:0 1px 0 rgba(0,0,0,.04)}
 .product-image{aspect-ratio:4/5;overflow:hidden;background:#ece5dc}
