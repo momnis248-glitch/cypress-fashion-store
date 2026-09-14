@@ -105,7 +105,7 @@
     if (extras.length > 7 || currentImages + extras.length > 8) { alert('A product can have at most 8 images in total.'); return; }
     if (video && (!['video/mp4','video/webm'].includes(video.type) || video.size > 10 * 1024 * 1024)) { alert('Use an MP4/WebM video smaller than 10 MB.'); return; }
     try {
-      const input = Object.fromEntries(new FormData(form)); input.description_en = editing?.description_en || ''; input.sizes = [...form.querySelectorAll('input[name="sizes"]:checked')].map(node => node.value); input.size_guides = {};
+      const input = Object.fromEntries(new FormData(form)); input.description_en = editing?.description_en || ''; input.description_km = editing?.description_km || ''; input.sizes = [...form.querySelectorAll('input[name="sizes"]:checked')].map(node => node.value); input.size_guides = {};
       form.querySelectorAll('[data-guide-size]').forEach(node => { const size = node.dataset.guideSize; (input.size_guides[size] ||= {})[node.dataset.guideField] = node.value.trim(); });
       input.color_images = editing?.color_images || {}; input.colorImageData = {}; await Promise.all([...form.querySelectorAll('[data-color-photo]')].map(async node => { if (node.files[0]) input.colorImageData[node.dataset.colorPhoto] = await readFile(node.files[0]); }));
       input.colors = COLOR_OPTIONS.filter(color => input.color_images[color.value] || input.colorImageData[color.value]).map(color => color.value); input.variant_sale_types = {}; input.stock_by_sku = Object.fromEntries([...form.querySelectorAll('[data-stock-sku]')].map(node => [node.dataset.stockSku, Math.max(0, Math.floor(Number(node.value) || 0))]));
@@ -136,7 +136,7 @@
       const editing = state.editId ? product(state.editId) : null;
       let html = baseProductAdmin();
       html = html.replace(/<label class="field">[^<]*<input name="main_photo"[\s\S]*?<\/label><label class="field">[^<]*<input name="detail_photo"[\s\S]*?<\/label>/, mediaAdminFields(editing));
-      html = html.replace('<div class="checks">', `<label class="field">សេចក្តីពិពណ៌នាខ្លី (Khmer)<textarea name="description_km">${esc(editing?.description_km || '')}</textarea></label><div class="checks">`);
+      html = html.replace('<div class="checks">', '<div class="checks">');
       return html;
     };
     saveProduct = saveMediaProduct;
