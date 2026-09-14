@@ -100,11 +100,13 @@
 
   const saveMediaProduct = async event => {
     event.preventDefault(); const form = event.currentTarget, editing = state.editId ? product(state.editId) : null, main = form.main_photo?.files?.[0], extras = [...(form.extra_photos?.files || [])], video = form.product_video?.files?.[0];
+    if (state.productSaveSending) return;
     if (!editing && !main) { alert('Choose a main product image.'); return; }
     const currentImages = main ? 0 : gallery(editing || {}).length;
     if (extras.length > 7 || currentImages + extras.length > 8) { alert('A product can have at most 8 images in total.'); return; }
     if (video && (!['video/mp4','video/webm'].includes(video.type) || video.size > 10 * 1024 * 1024)) { alert('Use an MP4/WebM video smaller than 10 MB.'); return; }
     try {
+      state.productSaveSending = true; const sendingToChannel = form.dataset.sendToChannel === 'true'; form.querySelectorAll('button').forEach(button => { button.disabled = true; }); const activeButton = form.querySelector(`[data-product-save="${sendingToChannel ? 'send' : 'only'}"]`); if (activeButton) activeButton.textContent = sendingToChannel ? 'Saving & Sending…' : 'Saving…';
       const input = Object.fromEntries(new FormData(form)); input.description_en = editing?.description_en || ''; input.description_km = editing?.description_km || ''; input.sizes = [...form.querySelectorAll('input[name="sizes"]:checked')].map(node => node.value); input.size_guides = {};
       form.querySelectorAll('[data-guide-size]').forEach(node => { const size = node.dataset.guideSize; (input.size_guides[size] ||= {})[node.dataset.guideField] = node.value.trim(); });
       input.color_images = editing?.color_images || {}; input.colorImageData = {}; await Promise.all([...form.querySelectorAll('[data-color-photo]')].map(async node => { if (node.files[0]) input.colorImageData[node.dataset.colorPhoto] = await readFile(node.files[0]); }));
@@ -113,9 +115,16 @@
       if (!input.colors.length) input.variant_sale_types.default = 'preorder'; input.sale_type = Object.values(input.variant_sale_types).includes('in_stock') ? 'in_stock' : 'preorder'; input.excludes_charms = Boolean(form.excludes_charms?.checked); input.published = form.published.checked; input.featured = form.featured.checked;
       input.imageDataList = await Promise.all([main, ...extras].filter(Boolean).map(readFile)); input.image_urls = gallery(editing || {}); input.image_url = editing?.image_url || ''; input.videoData = video ? await readFile(video) : ''; input.video_url = editing?.video_url || '';
       input.delivery_notes = form.use_custom_delivery_notes?.checked ? { en: form.delivery_notes_en?.value.trim() || '', km: form.delivery_notes_km?.value.trim() || '' } : {};
+      input.send_to_channel = sendingToChannel;
       const saved = await adminFetch(editing ? `/api/admin/products/${editing.id}` : '/api/admin/products', { method: editing ? 'PATCH' : 'POST', body: JSON.stringify(input) });
-      state.editId = null; await loadAdmin(); render(); showAdminSuccess(editing ? 'Product updated ✓' : 'Product added ✓'); return saved;
+      const savedProduct = saved.product || saved, channel = saved.channel || { sent: false, skipped: true };
+      state.channelRetryProductId = input.send_to_channel && !channel.sent ? savedProduct?.id : '';
+      state.editId = null; await loadAdmin(); render();
+      if (input.send_to_channel && !channel.sent) { alert('Product updated, but failed to send to channel.'); }
+      else showAdminSuccess(input.send_to_channel ? 'Product saved & sent to channel ✓' : (editing ? 'Product updated ✓' : 'Product added ✓'));
+      return saved;
     } catch (error) { if (error.message !== 'Cancelled') alert(error.message || 'Could not save product.'); }
+    finally { state.productSaveSending = false; }
   };
 
   setTimeout(() => {
@@ -137,7 +146,16 @@
       let html = baseProductAdmin();
       html = html.replace(/<label class="field">[^<]*<input name="main_photo"[\s\S]*?<\/label><label class="field">[^<]*<input name="detail_photo"[\s\S]*?<\/label>/, mediaAdminFields(editing));
       html = html.replace('<div class="checks">', '<div class="checks">');
+      const retry = state.channelRetryProductId ? `<div class="channel-send-retry">Product saved, but it was not sent to the channel.<button type="button" onclick="sendProductAgain('${state.channelRetryProductId}')" ${state.channelRetrySending ? 'disabled' : ''}>${state.channelRetrySending ? 'Sending…' : 'Send Again'}</button></div>` : '';
+      html = html.replace('<form id="product-form"', `${retry}<form id="product-form"`);
+      html = html.replace(/<button class="primary">[^<]*<\/button>/, '<div class="product-save-actions"><button type="submit" data-product-save="only" class="secondary" onclick="this.form.dataset.sendToChannel=\'false\'">Save Only</button><button type="submit" data-product-save="send" class="primary" onclick="this.form.dataset.sendToChannel=\'true\'">Save &amp; Send to Channel</button></div>');
       return html;
+    };
+    window.sendProductAgain = async id => {
+      if (state.channelRetrySending) return; state.channelRetrySending = true; render();
+      try { const result = await adminFetch(`/api/admin/products/${id}/send-channel`, { method: 'POST', body: JSON.stringify({}) }); if (!result.channel?.sent) throw Error(result.channel?.error || 'Could not send to channel.'); state.channelRetryProductId = ''; showAdminSuccess('Product sent to channel ✓'); }
+      catch (error) { alert(error.message || 'Could not send to channel.'); }
+      finally { state.channelRetrySending = false; render(); }
     };
     saveProduct = saveMediaProduct;
     if (state.view === 'detail') render();
