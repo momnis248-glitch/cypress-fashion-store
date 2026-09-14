@@ -38,6 +38,7 @@ create table if not exists public.products (
   excludes_charms boolean not null default false,
   image_url text not null,
   image_urls text[] not null default '{}',
+  detail_image_urls text[] not null default '{}',
   video_url text not null default '',
   detail_image_url text not null default '',
   delivery_notes jsonb not null default '{}'::jsonb,
