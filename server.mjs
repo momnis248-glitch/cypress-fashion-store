@@ -16,7 +16,7 @@ const defaults = {
   }
 };
 const sendJson = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)); };
-const readBody = req => new Promise((resolve, reject) => { let body = ''; req.on('data', chunk => { body += chunk; if (body.length > 22_000_000) reject(Error('Request too large')); }); req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { reject(Error('Invalid JSON')); } }); });
+const readBody = req => new Promise((resolve, reject) => { let body = ''; req.on('data', chunk => { body += chunk; if (body.length > 85_000_000) reject(Error('Request too large')); }); req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { reject(Error('Invalid JSON')); } }); });
 const cookieValue = (req, name) => String(req.headers.cookie || '').split(';').map(item => item.trim().split('=')).find(([key]) => key === name)?.slice(1).join('=') || '';
 function secureEqual(left, right) { const a = Buffer.from(String(left)), b = Buffer.from(String(right)); return a.length === b.length && timingSafeEqual(a, b); }
 function adminSessionToken() { return createHmac('sha256', process.env.ADMIN_SESSION_SECRET || process.env.ADMIN_KEY || '').update('cypress-fashion-store-admin-session-v1').digest('hex'); }
