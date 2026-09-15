@@ -12,11 +12,20 @@ function continueShoppingFromDeepLink(){
 function unavailableProductPage(){return `<section class="panel unavailable-product"><h2>This product is currently unavailable.</h2><p>该商品目前不可购买。您可以继续浏览商城中的其他商品。</p><button class="primary" onclick="continueShoppingFromDeepLink()">Continue Shopping / 继续逛商城</button></section>`}
 window.applyTelegramProductLink=function applyTelegramProductLink(){
   const id=telegramProductLinkId();
-  if(!id||state.deepLinkApplied)return;
+  if(!id)return;
+  // The scripts can see the URL before /api/store has finished. Re-run when
+  // store data arrives instead of treating that short loading window as an
+  // unavailable product.
+  if(state.deepLinkApplied){
+    if(state.products?.some(product=>product.id===id))state.deepLinkPending=false;
+    else if(Array.isArray(state.products)&&state.products.length)state.deepLinkPending=false;
+    state.productId=id;state.view='detail';
+    return;
+  }
   // A Telegram product link starts inside the Mini App, not inside the shop's
   // history. Keep an explicit internal fallback so our back UI never delegates
   // to Telegram / the browser history.
-  state.deepLinkApplied=true;state.deepLinkProductId=id;state.deepLinkEntry=true;state.productBackTarget='home';state.productId=id;state.view='detail';
+  state.deepLinkApplied=true;state.deepLinkProductId=id;state.deepLinkEntry=true;state.deepLinkPending=!state.products?.some(product=>product.id===id);state.productBackTarget='home';state.productId=id;state.view='detail';
   try{history.replaceState({...history.state,cypressProduct:id},'',`${location.pathname}?product=${encodeURIComponent(id)}`)}catch{}
 };
 
