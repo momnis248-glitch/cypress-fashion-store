@@ -228,6 +228,8 @@
     // the previously linked product after every card tap.
     showProduct = id => {
       if (state.view === 'shop') {
+        const staleTelegramEntry = state.deepLinkSignature || (state.deepLinkProductId ? `product_${state.deepLinkProductId}` : '');
+        if (staleTelegramEntry) state.ignoredTelegramDeepLink = staleTelegramEntry;
         state.deepLinkEntry = false; state.deepLinkPending = false; state.deepLinkProductId = ''; state.deepLinkSignature = ''; state.productBackTarget = '';
         try {
           const url = new URL(location.href);
