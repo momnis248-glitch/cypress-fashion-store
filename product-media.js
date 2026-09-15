@@ -139,7 +139,9 @@
   };
 
   const mediaProductDetail = () => {
-    const item = product(state.productId); if (!item) return `<section class="panel"><p>This product is currently unavailable.</p><button class="back home-return" onclick="showShop()">Continue Shopping</button></section>`;
+    const item = product(state.productId);
+    if (!item && state.deepLinkEntry && state.deepLinkPending) return `<section class="panel unavailable-product"><p>Loading product…</p></section>`;
+    if (!item) return `<section class="panel"><p>This product is currently unavailable.</p><button class="back home-return" onclick="showShop()">Continue Shopping</button></section>`;
     const type = optionType(item, '', ''), brief = languageIsKhmer() ? item.description_km : item.description_en;
     const longDetail = detailImages(item).length ? `<section class="product-long-details" aria-label="Product details">${detailImages(item).map((url, index) => `<img src="${esc(url)}" alt="${esc(productName(item))} detail ${index + 1}" loading="lazy">`).join('')}</section>` : '';
     const preview=`<div class="product-return-underlay" aria-hidden="true"><div><b>CYPRESS<br>Fashion Store</b><span>${languageIsKhmer() ? 'ផលិតផលពិសេស' : 'Featured'}</span><i></i><i></i><i></i></div></div>`;
