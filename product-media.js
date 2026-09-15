@@ -208,6 +208,9 @@
 
   const readFile = file => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(reader.result); reader.onerror = reject; reader.readAsDataURL(file); });
   const suggestedPrice = cost => { const value = priceNumber(cost); return value === null ? '' : Math.max(.99, Math.floor(value * 1.5 + 3) - .01).toFixed(2); };
+  // Named form controls are not consistently exposed as properties in Telegram's
+  // webview, so always look them up by name before reading or changing a price.
+  const pricingField = (form, name) => form?.querySelector(`[name="${name}"]`);
   const pricingAdminFields = editing => {
     const cost = editing?.cost_price ?? '', preorder = editing?.preorder_price ?? editing?.price ?? '', instock = editing?.instock_price ?? (preorder === '' ? '' : (Number(preorder) + 3).toFixed(2));
     return `<section class="pricing-admin"><b>Pricing / 价格</b><small>Cost price is private. Customers and Telegram never see it.</small><div class="pricing-grid"><label class="field">Cost Price (进货成本)<span class="money-input">$ <input name="cost_price" type="number" min="0" step="0.01" value="${esc(cost)}" oninput="costPriceChanged(this)"></span></label><label class="field">Suggested Pre-order<span class="money-input">$ <input name="suggested_preorder_price" type="number" readonly value="${suggestedPrice(cost)}"></span></label><label class="field">Pre-order Price<span class="money-input">$ <input name="preorder_price" type="number" min="0" step="0.01" value="${esc(preorder)}" oninput="preorderPriceChanged(this)"></span></label><label class="field">In Stock Price<span class="money-input">$ <input name="instock_price" type="number" min="0" step="0.01" value="${esc(instock)}" oninput="this.dataset.manual='true'"></span></label><label class="field stock-quantity">In Stock Quantity<span><input name="instock_quantity" type="number" min="0" step="1" value="${Math.max(0, Number(editing?.instock_quantity ?? editing?.stock_by_sku?.default ?? 0) || 0)}"></span></label></div><button type="button" class="price-reset" onclick="useSuggestedPrice(this)">Use Suggested Price</button></section>`;
@@ -229,7 +232,7 @@
       input.color_images = editing?.color_images || {}; input.colorImageData = {}; await Promise.all([...form.querySelectorAll('[data-color-photo]')].map(async node => { if (node.files[0]) input.colorImageData[node.dataset.colorPhoto] = await readFile(node.files[0]); }));
       input.colors = COLOR_OPTIONS.filter(color => input.color_images[color.value] || input.colorImageData[color.value]).map(color => color.value); input.variant_sale_types = {}; input.stock_by_sku = Object.fromEntries([...form.querySelectorAll('[data-stock-sku]')].map(node => [node.dataset.stockSku, Math.max(0, Math.floor(Number(node.value) || 0))]));
       const pickedSizes = input.sizes.length ? input.sizes : ['']; form.querySelectorAll('[data-variant-type]').forEach(node => { if (!input.colors.includes(node.dataset.variantType)) return; pickedSizes.forEach(size => input.variant_sale_types[stockKey(size, node.dataset.variantType)] = node.value); });
-      input.instock_quantity = Math.max(0, Math.floor(Number(form.instock_quantity?.value) || 0));
+      input.instock_quantity = Math.max(0, Math.floor(Number(pricingField(form, 'instock_quantity')?.value) || 0));
       if (!input.colors.length) input.variant_sale_types.default = 'preorder';
       if (input.instock_quantity || Object.prototype.hasOwnProperty.call(editing?.stock_by_sku || {}, 'default')) input.stock_by_sku.default = input.instock_quantity;
       input.sale_type = Object.values(input.variant_sale_types).includes('in_stock') ? 'in_stock' : 'preorder'; input.excludes_charms = Boolean(form.excludes_charms?.checked); input.published = form.published.checked; input.featured = form.featured.checked;
@@ -344,12 +347,12 @@
       return html;
     };
     window.costPriceChanged = input => {
-      const form = input.form, suggested = form?.suggested_preorder_price, preorder = form?.preorder_price, instock = form?.instock_price;
+      const form = input.form, suggested = pricingField(form, 'suggested_preorder_price'), preorder = pricingField(form, 'preorder_price'), instock = pricingField(form, 'instock_price');
       const next = suggestedPrice(input.value); if (suggested) suggested.value = next;
       if (preorder && !preorder.dataset.manual) { preorder.value = next; if (instock && !instock.dataset.manual) instock.value = next ? (Number(next) + 3).toFixed(2) : ''; }
     };
-    window.preorderPriceChanged = input => { input.dataset.manual = 'true'; const instock = input.form?.instock_price; if (instock && !instock.dataset.manual) instock.value = input.value === '' ? '' : (Number(input.value || 0) + 3).toFixed(2); };
-    window.useSuggestedPrice = button => { const form = button.form || button.closest('form'), suggested = form?.suggested_preorder_price?.value; if (!form || !suggested) return; form.preorder_price.value = suggested; form.preorder_price.dataset.manual = ''; form.instock_price.value = (Number(suggested) + 3).toFixed(2); form.instock_price.dataset.manual = ''; };
+    window.preorderPriceChanged = input => { input.dataset.manual = 'true'; const instock = pricingField(input.form, 'instock_price'); if (instock && !instock.dataset.manual) instock.value = input.value === '' ? '' : (Number(input.value || 0) + 3).toFixed(2); };
+    window.useSuggestedPrice = button => { const form = button.form || button.closest('form'), suggested = pricingField(form, 'suggested_preorder_price')?.value, preorder = pricingField(form, 'preorder_price'), instock = pricingField(form, 'instock_price'); if (!form || !suggested || !preorder || !instock) return; preorder.value = suggested; preorder.dataset.manual = ''; instock.value = (Number(suggested) + 3).toFixed(2); instock.dataset.manual = ''; };
     window.sendProductAgain = async id => {
       if (state.channelRetrySending) return; state.channelRetrySending = true; render();
       try { const result = await adminFetch(`/api/admin/products/${id}/send-channel`, { method: 'POST', body: JSON.stringify({}) }); if (!result.channel?.sent) throw Error(result.channel?.error || 'Could not send to channel.'); state.channelRetryProductId = ''; showAdminSuccess('Product sent to channel ✓'); }
