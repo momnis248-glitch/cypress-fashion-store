@@ -207,7 +207,22 @@
   };
 
   setTimeout(() => {
-    const baseCart = cart, baseRequest = requestQR, baseProductAdmin = productAdmin, baseRender = render, baseProductBack = window.goBack || goBack;
+    const baseCart = cart, baseRequest = requestQR, baseProductAdmin = productAdmin, baseRender = render, baseProductBack = window.goBack || goBack, baseShowProduct = showProduct;
+    // Once a shopper is browsing the store, a deliberate product-card tap must
+    // win over any old Telegram start parameter still present in this reused
+    // Mini App webview. Otherwise the timer in the deep-link bridge can reopen
+    // the previously linked product after every card tap.
+    showProduct = id => {
+      if (state.view === 'shop') {
+        state.deepLinkEntry = false; state.deepLinkPending = false; state.deepLinkProductId = ''; state.deepLinkSignature = ''; state.productBackTarget = '';
+        try {
+          const url = new URL(location.href);
+          ['tgWebAppStartParam', 'startapp', 'product'].forEach(key => url.searchParams.delete(key));
+          history.replaceState({ ...(history.state || {}), cypressStoreBrowse: true }, '', `${url.pathname}${url.search}${url.hash}`);
+        } catch {}
+      }
+      return baseShowProduct(id);
+    };
     // Both the visible arrow and the left-edge gesture use this one internal
     // route. A product opened from Telegram has no store page in its trail, so
     // it deliberately enters /home instead of delegating to browser history.
