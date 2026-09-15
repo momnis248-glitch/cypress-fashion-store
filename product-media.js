@@ -162,7 +162,7 @@
   };
   const comboAvailable = (item, size, color, saleType = optionType(item, size, color)) => saleType !== 'in_stock' || stockForChoice(item, size, color) > 0;
   const optionSheet = item => {
-    const draft = state.productOptionDraft || {}, sizes = item.category === 'clothes' ? (item.sizes || []) : [], colors = item.colors || [];
+    const draft = state.productOptionDraft || {}, sizes = ['clothes', 'shoes'].includes(item.category) ? (item.sizes || []) : [], colors = item.colors || [];
     const selectedSize = draft.size || '', selectedColor = draft.color || '', selectedType = draft.sale_type || 'preorder', max = selectedType === 'in_stock' ? stockForChoice(item, selectedSize, selectedColor) : 99;
     const colorButtons = colors.length ? `<div class="option-group"><b>${languageIsKhmer() ? 'ពណ៌' : 'Color'}</b><div class="option-buttons">${colors.map(color => { const enabled = !sizes.length ? comboAvailable(item, '', color) : (!selectedSize || comboAvailable(item, selectedSize, color)); const photo = item.color_images?.[color]; return `<button type="button" class="option-button ${selectedColor === color ? 'selected' : ''}" ${enabled ? '' : 'disabled'} onclick="setProductOption('color','${esc(color)}')">${photo ? `<img src="${esc(photo)}" alt="">` : ''}${esc(colorName ? colorName(color) : color)}</button>`; }).join('')}</div></div>` : '';
     const sizeButtons = sizes.length ? `<div class="option-group"><b>${languageIsKhmer() ? 'ទំហំ' : 'Size'}</b><div class="option-buttons">${sizes.map(size => { const enabled = !colors.length ? comboAvailable(item, size, '') : (!selectedColor || comboAvailable(item, size, selectedColor)); return `<button type="button" class="option-button ${selectedSize === size ? 'selected' : ''}" ${enabled ? '' : 'disabled'} onclick="setProductOption('size','${esc(size)}')">${esc(size)}</button>`; }).join('')}</div></div>` : '';
@@ -178,7 +178,7 @@
   window.adjustProductQuantity = delta => { const draft = state.productOptionDraft, item = product(draft?.id); if (!draft || !item) return; const max = draft.sale_type === 'in_stock' ? stockForChoice(item, draft.size, draft.color) : 99; draft.qty = Math.max(1, Math.min(max || 1, Number(draft.qty || 1) + delta)); refreshOptionSheet(); };
   window.confirmProductOptions = () => {
     const draft = state.productOptionDraft, item = product(draft?.id); if (!draft || !item) return;
-    if ((item.colors?.length && !draft.color) || (item.category === 'clothes' && item.sizes?.length && !draft.size)) { alert('Please select all options.'); return; }
+    if ((item.colors?.length && !draft.color) || (['clothes', 'shoes'].includes(item.category) && item.sizes?.length && !draft.size)) { alert('Please select all options.'); return; }
     if (!comboAvailable(item, draft.size, draft.color, draft.sale_type)) { alert('This option is sold out.'); return; }
     const chosen = { id: item.id, size: draft.size, color: draft.color, sale_type: draft.sale_type, qty: Number(draft.qty || 1) };
     document.querySelector('.option-overlay')?.remove();
@@ -338,6 +338,11 @@
     productAdmin = () => {
       const editing = state.editId ? product(state.editId) : null;
       let html = baseProductAdmin();
+      html = html.replace(
+        `<option value="bags" ${editing?.category==='bags'?'selected':''}>${t('bags')}</option><option value="charms" ${editing?.category==='charms'?'selected':''}>${t('charms')}</option>`,
+        `<option value="bags" ${editing?.category==='bags'?'selected':''}>${t('bags')}</option><option value="shoes" ${editing?.category==='shoes'?'selected':''}>${t('shoes')}</option><option value="charms" ${editing?.category==='charms'?'selected':''}>${t('charms')}</option>`
+      );
+      if (editing?.category === 'shoes') html = html.replace('<div id="size-field" hidden>', '<div id="size-field">');
       html = html.replace(/<label class="field">(?:(?!<\/label>)[\s\S])*?<input name="price"[\s\S]*?<\/label>/, pricingAdminFields(editing));
       html = html.replace(/<label class="field">[^<]*<input name="main_photo"[\s\S]*?<\/label><label class="field">[^<]*<input name="detail_photo"[\s\S]*?<\/label>/, mediaAdminFields(editing));
       html = html.replace('<div class="checks">', '<div class="checks">');
