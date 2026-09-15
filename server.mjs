@@ -15,6 +15,8 @@ const defaults = {
     km: 'ទំនិញបញ្ជាទិញមុន (Pre-order): ទទួលបានទំនិញក្នុងរយៈពេល 15–18 ថ្ងៃ បន្ទាប់ពីធ្វើការបញ្ជាទិញ។\nទំនិញមានស្តុក – ដឹកជញ្ជូន: ទទួលបានទំនិញក្នុងរយៈពេល 3–4 ថ្ងៃ។\nមកយកដោយខ្លួនឯង: អាចមកយកបានបន្ទាប់ពីចេញពីធ្វើការនៅថ្ងៃបន្ទាប់។\nទីតាំងមកយក: បន្ទប់សន្តិសុខនៅរោងចក្រ T20។'
   }
 };
+const FREE_DELIVERY_THRESHOLD = 25;
+const DELIVERY_FEE = 3;
 const sendJson = (res, status, body, headers = {}) => { res.writeHead(status, { 'content-type': 'application/json', ...headers }); res.end(JSON.stringify(body)); };
 const readBody = req => new Promise((resolve, reject) => { let body = ''; req.on('data', chunk => { body += chunk; if (body.length > 85_000_000) reject(Error('Request too large')); }); req.on('end', () => { try { resolve(JSON.parse(body || '{}')); } catch { reject(Error('Invalid JSON')); } }); });
 const cookieValue = (req, name) => String(req.headers.cookie || '').split(';').map(item => item.trim().split('=')).find(([key]) => key === name)?.slice(1).join('=') || '';
@@ -105,7 +107,7 @@ async function sendPaymentQr(chatId, order) {
   await ensureTelegramWebhook().catch(error => console.error(error.message));
   const photo = process.env.PAYMENT_QR_FILE_ID || process.env.PAYMENT_QR_IMAGE_URL || `${process.env.RENDER_EXTERNAL_URL}/payment-qr.png`;
   const items = (order.items || []).map(item => `• ${item.quantity} × ${item.name}${item.color ? ` (${item.color}${item.size ? ` / ${item.size}` : ''})` : item.size ? ` (${item.size})` : ''}`).join('\n');
-  const caption = ['Payment QR / QR កូដបង់ប្រាក់', '', `Order: ${order.order_number}`, items, `Total: $${Number(order.total).toFixed(2)}`, order.delivery === 'pickup' ? 'Pickup / មកយកផ្ទាល់' : 'Delivery / ដឹកជញ្ជូន', '', 'Please scan the QR code to complete payment. After payment, reply to this message with your payment screenshot.', 'សូមស្កេន QR ដើម្បីបង់ប្រាក់ ហើយឆ្លើយតបសារនេះជាមួយរូបភាពបញ្ជាក់ការបង់ប្រាក់។'].filter(Boolean).join('\n').slice(0, 1024);
+  const caption = ['Payment QR / QR កូដបង់ប្រាក់', '', `Order: ${order.order_number}`, items, `Subtotal: $${Number(order.subtotal).toFixed(2)}`, order.delivery === 'pickup' ? 'Delivery: Self-Pickup · FREE' : `Delivery: ${Number(order.shipping) === 0 ? 'FREE' : `$${Number(order.shipping).toFixed(2)}`}`, `Total: $${Number(order.total).toFixed(2)}`, '', 'Please scan the QR code to complete payment. After payment, reply to this message with your payment screenshot.', 'សូមស្កេន QR ដើម្បីបង់ប្រាក់ ហើយឆ្លើយតបសារនេះជាមួយរូបភាពបញ្ជាក់ការបង់ប្រាក់។'].filter(Boolean).join('\n').slice(0, 1024);
   await telegramApi('sendPhoto', { chat_id: chatId, photo, caption });
 }
 async function publishProductToChannel(product) {
@@ -255,10 +257,8 @@ const server = createServer(async (req, res) => {
         return { id: product.id, name: product.name_en, size: String(item.size || ''), color: String(item.color || ''), sku, quantity, price: productPrice(product, sale_type), sale_type };
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
-      const settings = (await db('store_settings?select=shipping,free_shipping_threshold&id=eq.1'))?.[0] || defaults;
       const delivery = input.delivery === 'pickup' ? 'pickup' : 'delivery', region = String(input.region || '');
-      const threshold = Number(settings.free_shipping_threshold), deliveryFee = Number(String(settings.shipping?.[region] || '$0').replace('$', ''));
-      const shipping = delivery === 'delivery' && !(Number.isFinite(threshold) && threshold > 0 && subtotal >= threshold) ? deliveryFee : 0;
+      const shipping = delivery === 'delivery' && subtotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0;
       const order = { telegram_user_id: String(telegramUser?.id || `web-${randomUUID()}`), customer_name: String(input.name || '').trim(), contact: String(input.contact || '').trim(), address: String(input.address || '').trim(), delivery, region, items, subtotal, shipping, total: subtotal + shipping };
       if (!order.customer_name || !order.contact) return sendJson(res, 400, { error: 'Customer information is required.' });
       const saved = await db('rpc/create_pending_order', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ p_order: order }) });
