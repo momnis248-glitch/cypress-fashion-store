@@ -2,6 +2,14 @@
 // extend the historical storefront without resetting its route memory.
 (() => {
   const esc = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;' }[char]));
+  const syncTelegramSafeInset = () => {
+    const webApp = window.Telegram?.WebApp;
+    const top = Number(webApp?.contentSafeAreaInset?.top ?? webApp?.safeAreaInset?.top ?? 0);
+    document.documentElement.style.setProperty('--telegram-top-inset', `${Math.max(0, top)}px`);
+  };
+  syncTelegramSafeInset();
+  window.Telegram?.WebApp?.onEvent?.('viewportChanged', syncTelegramSafeInset);
+  window.Telegram?.WebApp?.onEvent?.('safeAreaChanged', syncTelegramSafeInset);
   const product = id => state.products.find(item => item.id === id);
   const gallery = item => {
     const urls = [item.image_url, ...(Array.isArray(item.image_urls) ? item.image_urls : [])].filter(Boolean);
@@ -40,7 +48,7 @@
     const asset = active.kind === 'video'
       ? `<video controls playsinline preload="metadata" muted loop src="${esc(active.url)}"></video><span class="video-chip">▶ Video</span>`
       : `<img src="${esc(active.url)}" alt="${esc(productName(item))}" loading="eager">`;
-    return `<div id="product-media-carousel" class="product-carousel ${direction ? `carousel-swipe-${direction}` : ''}" ontouchstart="carouselTouchStart(event,'${item.id}')" ontouchend="carouselTouchEnd(event,'${item.id}')"><button class="carousel-back" aria-label="Back" onclick="goBack()">←</button>${asset}${media.length > 1 ? `<button class="carousel-arrow previous" aria-label="Previous" onclick="moveCarousel('${item.id}',-1)">‹</button><button class="carousel-arrow next" aria-label="Next" onclick="moveCarousel('${item.id}',1)">›</button><span class="carousel-count">${current + 1}/${media.length}</span>` : ''}</div>`;
+    return `<div id="product-media-carousel" class="product-carousel ${direction ? `carousel-swipe-${direction}` : ''}" ontouchstart="productDetailTouchStart(event,'${item.id}')" ontouchmove="productDetailTouchMove(event,'${item.id}')" ontouchend="productDetailTouchEnd(event,'${item.id}')" ontouchcancel="productDetailTouchEnd(event,'${item.id}')"><button class="carousel-back" aria-label="Back" onclick="returnFromProduct()">←</button>${asset}${media.length > 1 ? `<button class="carousel-arrow previous" aria-label="Previous" onclick="moveCarousel('${item.id}',-1)">‹</button><button class="carousel-arrow next" aria-label="Next" onclick="moveCarousel('${item.id}',1)">›</button><span class="carousel-count">${current + 1}/${media.length}</span>` : ''}</div>`;
   };
   window.moveCarousel = (id, direction) => {
     const item = product(id); if (!item) return;
@@ -50,9 +58,55 @@
     const target = document.querySelector('#product-media-carousel');
     if (target) { target.outerHTML = carouselHtml(item, direction > 0 ? 'next' : 'previous'); activateCarouselMedia(item); }
   };
-  let touchX = null;
-  window.carouselTouchStart = event => { touchX = event.changedTouches?.[0]?.clientX ?? null; };
-  window.carouselTouchEnd = (event, id) => { const x = event.changedTouches?.[0]?.clientX; if (touchX !== null && Math.abs(x - touchX) > 28) window.moveCarousel(id, x < touchX ? 1 : -1); touchX = null; };
+  let detailTouch = null;
+  const edgeWidth = () => Math.min(32, Math.max(22, Math.round(window.innerWidth * .075)));
+  const detailPage = () => document.querySelector('.product-detail-media');
+  const returnUnderlay = () => document.querySelector('.product-return-underlay');
+  const resetDetailDrag = () => {
+    const page = detailPage();
+    if (!page) return;
+    page.classList.remove('edge-back-dragging', 'edge-back-leaving');
+    page.style.removeProperty('--edge-back-x');
+    page.style.removeProperty('--edge-back-progress');
+    const underlay = returnUnderlay(); if (underlay) underlay.style.opacity = '0';
+  };
+  window.productDetailTouchStart = (event, id) => {
+    const touch = event.touches?.[0] || event.changedTouches?.[0];
+    if (!touch) return;
+    detailTouch = { id, startX: touch.clientX, startY: touch.clientY, lastX: touch.clientX, lastY: touch.clientY, at: performance.now(), edge: touch.clientX <= edgeWidth(), dragging: false };
+  };
+  window.productDetailTouchMove = event => {
+    const touch = event.touches?.[0] || event.changedTouches?.[0];
+    if (!detailTouch || !touch) return;
+    detailTouch.lastX = touch.clientX; detailTouch.lastY = touch.clientY;
+    const dx = touch.clientX - detailTouch.startX, dy = touch.clientY - detailTouch.startY;
+    if (!detailTouch.edge || dx <= 0 || Math.abs(dy) > Math.abs(dx)) return;
+    detailTouch.dragging = true;
+    const page = detailPage();
+    if (!page) return;
+    const progress = Math.min(.92, dx / Math.max(1, window.innerWidth));
+    page.classList.add('edge-back-dragging');
+    page.style.setProperty('--edge-back-x', `${Math.min(dx, window.innerWidth)}px`);
+    page.style.setProperty('--edge-back-progress', String(progress));
+    const underlay = returnUnderlay(); if (underlay) underlay.style.opacity = String(Math.min(.96, progress * 1.45));
+  };
+  window.productDetailTouchEnd = (event, id) => {
+    const touch = event.changedTouches?.[0];
+    if (!detailTouch || !touch) { detailTouch = null; return; }
+    const dx = touch.clientX - detailTouch.startX, dy = touch.clientY - detailTouch.startY;
+    const elapsed = Math.max(1, performance.now() - detailTouch.at);
+    const shouldReturn = detailTouch.edge && detailTouch.dragging && dx > 0 && Math.abs(dx) > Math.abs(dy) && (dx > window.innerWidth * .28 || dx / elapsed > .62);
+    detailTouch = null;
+    if (shouldReturn) {
+      const page = detailPage();
+      if (page) { page.classList.remove('edge-back-dragging'); page.classList.add('edge-back-leaving'); page.style.setProperty('--edge-back-x', `${window.innerWidth}px`); page.style.setProperty('--edge-back-progress', '1'); }
+      const underlay = returnUnderlay(); if (underlay) underlay.style.opacity = '1';
+      window.setTimeout(() => window.returnFromProduct?.(), 180);
+      return;
+    }
+    resetDetailDrag();
+    if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy)) window.moveCarousel(id, dx < 0 ? 1 : -1);
+  };
 
   const optionType = (item, size, color) => variantType(item, size, color);
   const optionStock = (item, size, color) => variantStock(item, size, color);
@@ -88,7 +142,8 @@
     const item = product(state.productId); if (!item) return `<section class="panel"><p>This product is currently unavailable.</p><button class="back home-return" onclick="showShop()">Continue Shopping</button></section>`;
     const type = optionType(item, '', ''), brief = languageIsKhmer() ? item.description_km : item.description_en;
     const longDetail = detailImages(item).length ? `<section class="product-long-details" aria-label="Product details">${detailImages(item).map((url, index) => `<img src="${esc(url)}" alt="${esc(productName(item))} detail ${index + 1}" loading="lazy">`).join('')}</section>` : '';
-    return `<section class="product-detail product-detail-media">${carouselHtml(item)}<div class="detail-media-info"><h2>${esc(productName(item))}</h2>${brief ? `<p class="product-brief">${esc(brief)}</p>` : ''}<div class="detail-price-row">${variantSaleBadge(type)}<strong>${money(item.price)}</strong></div><div class="delivery-mini"><b>${languageIsKhmer() ? 'ការដឹកជញ្ជូន' : 'Delivery Information'}</b><span>${deliveryText(item)}</span></div>${item.category === 'bags' && item.excludes_charms ? `<p class="bag-charms-note">${t('excludesCharms')}</p>` : ''}</div>${longDetail}<div class="detail-bottom-spacer"></div><nav class="product-action-bar"><button class="product-cart-icon" aria-label="Cart" onclick="showCart()">🛒${itemCount() ? `<i>${itemCount()}</i>` : ''}</button><button class="secondary action-add" onclick="openProductOptions('${item.id}','cart')">Add to Cart</button><button class="primary action-buy" onclick="openProductOptions('${item.id}','buy')">Buy Now</button></nav></section>`;
+    const preview=`<div class="product-return-underlay" aria-hidden="true"><div><b>CYPRESS<br>Fashion Store</b><span>${languageIsKhmer() ? 'ផលិតផលពិសេស' : 'Featured'}</span><i></i><i></i><i></i></div></div>`;
+    return `<section class="product-detail product-detail-media">${carouselHtml(item)}<div class="detail-media-info"><h2>${esc(productName(item))}</h2>${brief ? `<p class="product-brief">${esc(brief)}</p>` : ''}<div class="detail-price-row">${variantSaleBadge(type)}<strong>${money(item.price)}</strong></div><div class="delivery-mini"><b>${languageIsKhmer() ? 'ការដឹកជញ្ជូន' : 'Delivery Information'}</b><span>${deliveryText(item)}</span></div>${item.category === 'bags' && item.excludes_charms ? `<p class="bag-charms-note">${t('excludesCharms')}</p>` : ''}</div>${longDetail}<div class="detail-bottom-spacer"></div><nav class="product-action-bar"><button class="product-cart-icon" aria-label="Cart" onclick="showCart()">🛒${itemCount() ? `<i>${itemCount()}</i>` : ''}</button><button class="secondary action-add" onclick="openProductOptions('${item.id}','cart')">Add to Cart</button><button class="primary action-buy" onclick="openProductOptions('${item.id}','buy')">Buy Now</button></nav></section>${preview}`;
   };
 
   const directCheckout = () => {
@@ -131,7 +186,21 @@
   };
 
   setTimeout(() => {
-    const baseCart = cart, baseRequest = requestQR, baseProductAdmin = productAdmin, baseRender = render;
+    const baseCart = cart, baseRequest = requestQR, baseProductAdmin = productAdmin, baseRender = render, baseProductBack = window.goBack || goBack;
+    // Both the visible arrow and the left-edge gesture use this one internal
+    // route. A product opened from Telegram has no store page in its trail, so
+    // it deliberately enters /home instead of delegating to browser history.
+    window.returnFromProduct = () => {
+      if (state.view !== 'detail') return baseProductBack();
+      const directTelegramEntry = Boolean(state.deepLinkEntry || state.productBackTarget === 'home');
+      if (directTelegramEntry || !state.pageTrail?.length) {
+        state.deepLinkEntry = false; state.deepLinkProductId = ''; state.productBackTarget = ''; state.category = 'all';
+        return showShop();
+      }
+      return baseProductBack();
+    };
+    goBack = () => window.returnFromProduct();
+    window.goBack = goBack;
     render = () => { document.body.classList.toggle('detail-immersive', state.view === 'detail'); baseRender(); if (state.view === 'detail') requestAnimationFrame(() => { const item = product(state.productId); if (item) activateCarouselMedia(item); }); };
     productDetail = mediaProductDetail;
     cart = () => state.buyNowItem ? directCheckout() : baseCart();
