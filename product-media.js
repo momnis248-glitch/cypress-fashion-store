@@ -338,10 +338,7 @@
     productAdmin = () => {
       const editing = state.editId ? product(state.editId) : null;
       let html = baseProductAdmin();
-      html = html.replace(
-        `<option value="bags" ${editing?.category==='bags'?'selected':''}>${t('bags')}</option><option value="charms" ${editing?.category==='charms'?'selected':''}>${t('charms')}</option>`,
-        `<option value="bags" ${editing?.category==='bags'?'selected':''}>${t('bags')}</option><option value="shoes" ${editing?.category==='shoes'?'selected':''}>${t('shoes')}</option><option value="charms" ${editing?.category==='charms'?'selected':''}>${t('charms')}</option>`
-      );
+      html = html.replace(/(<option value="bags"[^>]*>[^<]*<\/option>)(<option value="charms"[^>]*>[^<]*<\/option>)/, `$1<option value="shoes" ${editing?.category === 'shoes' ? 'selected' : ''}>${t('shoes')}</option>$2`);
       if (editing?.category === 'shoes') html = html.replace('<div id="size-field" hidden>', '<div id="size-field">');
       html = html.replace(/<label class="field">(?:(?!<\/label>)[\s\S])*?<input name="price"[\s\S]*?<\/label>/, pricingAdminFields(editing));
       html = html.replace(/<label class="field">[^<]*<input name="main_photo"[\s\S]*?<\/label><label class="field">[^<]*<input name="detail_photo"[\s\S]*?<\/label>/, mediaAdminFields(editing));
