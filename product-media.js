@@ -19,14 +19,45 @@
   const itemCount = () => state.cart.reduce((count, item) => count + Number(item.qty || 0), 0);
   const languageIsKhmer = () => state.language === 'km';
   const freeDeliveryThreshold = 25;
+  const freeDeliveryCopy = () => languageIsKhmer() ? {
+    policy: 'ដឹកជញ្ជូនឥតគិតថ្លៃសម្រាប់ការបញ្ជាទិញចាប់ពី $25',
+    pickupFree: 'មកយកដោយខ្លួនឯង · ឥតគិតថ្លៃ',
+    addMore: amount => `បន្ថែម ${money(amount)} ទៀត ដើម្បីទទួលបានការដឹកជញ្ជូនឥតគិតថ្លៃ 🚚`,
+    unlocked: 'អ្នកទទួលបានការដឹកជញ្ជូនឥតគិតថ្លៃហើយ! 🎉',
+    delivery: 'ដឹកជញ្ជូន',
+    pickup: 'មកយកដោយខ្លួនឯង',
+    freeThisOrder: 'ឥតគិតថ្លៃសម្រាប់ការបញ្ជាទិញនេះ',
+    deliveryFee: 'ថ្លៃដឹក $3.00',
+    alwaysFree: 'ឥតគិតថ្លៃជានិច្ច',
+    pickupLocation: 'ផ្លូវជាតិលេខ 4, គីឡូម៉ែត្រ 82, បន្ទប់សន្តិសុខរោងចក្រ T20',
+    subtotal: 'សរុបរង',
+    shipping: 'ថ្លៃដឹកជញ្ជូន',
+    confirm: 'បញ្ជាក់ការបង់ប្រាក់'
+  } : {
+    policy: 'FREE DELIVERY ON ORDERS $25+',
+    pickupFree: 'Self-Pickup · FREE',
+    addMore: amount => `Add ${money(amount)} more for FREE delivery 🚚`,
+    unlocked: 'You’ve unlocked FREE delivery! 🎉',
+    delivery: 'Delivery',
+    pickup: 'Self-Pickup',
+    freeThisOrder: 'FREE on this order',
+    deliveryFee: '$3.00 delivery fee',
+    alwaysFree: 'Always FREE',
+    pickupLocation: 'National Road No. 4, KM 82, T20 Factory Security Room',
+    subtotal: 'Subtotal',
+    shipping: 'Delivery',
+    confirm: 'Confirm Payment'
+  };
   const deliveryFeeFor = subtotal => state.delivery === 'pickup' || Number(subtotal || 0) >= freeDeliveryThreshold ? 0 : 3;
   const freeDeliveryProgress = subtotal => {
     const value = Math.max(0, Number(subtotal || 0)), remaining = Math.max(0, freeDeliveryThreshold - value), percent = Math.min(100, value / freeDeliveryThreshold * 100);
-    return `<aside class="free-delivery-progress"><b>FREE DELIVERY ON ORDERS $25+</b><span>${state.delivery === 'pickup' ? 'Self-Pickup · FREE' : remaining > 0 ? `Add ${money(remaining)} more for FREE delivery 🚚` : 'You’ve unlocked FREE delivery! 🎉'}</span><div aria-label="Free delivery progress"><i style="width:${percent}%"></i></div><small>$0 <em>$25</em></small></aside>`;
+    const copy = freeDeliveryCopy();
+    return `<aside class="free-delivery-progress"><b>${copy.policy}</b><span>${state.delivery === 'pickup' ? copy.pickupFree : remaining > 0 ? copy.addMore(remaining) : copy.unlocked}</span><div aria-label="${copy.policy}"><i style="width:${percent}%"></i></div><small>$0 <em>$25</em></small></aside>`;
   };
   const freeDeliveryCheckout = subtotal => {
     const sub = Number(subtotal || 0), shipping = deliveryFeeFor(sub), pickup = state.delivery === 'pickup';
-    return `<div class="form-grid"><label class="field">${t('name')}<input id="customer-name"></label><label class="field">${t('contact')}<input id="customer-contact" placeholder="@username or 012…"></label></div><div class="delivery"><button class="${!pickup ? 'selected' : ''}" onclick="delivery('delivery')"><b>Delivery</b><br><small>${sub >= freeDeliveryThreshold ? 'FREE on this order' : '$3.00 delivery fee'}</small></button><button class="${pickup ? 'selected' : ''}" onclick="delivery('pickup')"><b>Self-Pickup</b><br><small>Always FREE</small></button></div>${pickup ? `<div class="notice">Self-Pickup · FREE<br><small>National Road No. 4, KM 82, T20 Factory Security Room</small></div>` : `<label class="field">${t('address')}<textarea id="customer-address" placeholder="${t('addressHint')}"></textarea></label>`}${freeDeliveryProgress(sub)}<div class="checkout-breakdown"><span>Subtotal <b>${money(sub)}</b></span><span>Delivery <b>${shipping === 0 ? 'FREE' : money(shipping)}</b></span></div><div class="checkout-total"><span>${t('total')}</span><span>${money(sub + shipping)}</span></div><button class="primary" onclick="requestQR()">Confirm Payment</button><p class="footer">FREE DELIVERY ON ORDERS $25+</p>`;
+    const copy = freeDeliveryCopy();
+    return `<div class="form-grid"><label class="field">${t('name')}<input id="customer-name"></label><label class="field">${t('contact')}<input id="customer-contact" placeholder="@username or 012…"></label></div><div class="delivery"><button class="${!pickup ? 'selected' : ''}" onclick="delivery('delivery')"><b>${copy.delivery}</b><br><small>${sub >= freeDeliveryThreshold ? copy.freeThisOrder : copy.deliveryFee}</small></button><button class="${pickup ? 'selected' : ''}" onclick="delivery('pickup')"><b>${copy.pickup}</b><br><small>${copy.alwaysFree}</small></button></div>${pickup ? `<div class="notice">${copy.pickupFree}<br><small>${copy.pickupLocation}</small></div>` : `<label class="field">${t('address')}<textarea id="customer-address" placeholder="${t('addressHint')}"></textarea></label>`}${freeDeliveryProgress(sub)}<div class="checkout-breakdown"><span>${copy.subtotal} <b>${money(sub)}</b></span><span>${copy.shipping} <b>${shipping === 0 ? 'FREE' : money(shipping)}</b></span></div><div class="checkout-total"><span>${t('total')}</span><span>${money(sub + shipping)}</span></div><button class="primary" onclick="requestQR()">${copy.confirm}</button><p class="footer">${copy.policy}</p>`;
   };
   const typeLabel = (type) => languageIsKhmer() ? (type === 'in_stock' ? 'មានស្តុក' : 'បញ្ជាទិញមុន') : (type === 'in_stock' ? 'IN STOCK' : 'PRE-ORDER');
   const deliveryText = item => {
@@ -221,7 +252,13 @@
     // One fixed policy is used in every customer entry point. The server repeats
     // this same calculation before an order is saved.
     cleanCheckout = freeDeliveryCheckout;
-    shop = () => `<div class="store-free-delivery">FREE DELIVERY ON ORDERS $25+</div>${baseShop()}`;
+    shop = () => {
+      const home = baseShop(), channel = typeof channelButton === 'function' ? channelButton() : '';
+      const banner = `<div class="store-free-delivery">${freeDeliveryCopy().policy}</div>`;
+      // Put the policy beside the shopping actions, immediately under the
+      // channel entry, rather than above the storefront hero.
+      return channel && home.includes(channel) ? home.replace(channel, `${channel}${banner}`) : `${banner}${home}`;
+    };
     // Once a shopper is browsing the store, a deliberate product-card tap must
     // win over any old Telegram start parameter still present in this reused
     // Mini App webview. Otherwise the timer in the deep-link bridge can reopen
