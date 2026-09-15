@@ -194,6 +194,7 @@
     // it deliberately enters /home instead of delegating to browser history.
     window.returnFromProduct = () => {
       if (state.view !== 'detail') return baseProductBack();
+      if (window.returnFromTelegramProduct?.()) return;
       const directTelegramEntry = Boolean(state.deepLinkEntry || state.productBackTarget === 'home');
       if (directTelegramEntry || !state.pageTrail?.length) {
         state.deepLinkEntry = false; state.deepLinkProductId = ''; state.productBackTarget = ''; state.category = 'all';
