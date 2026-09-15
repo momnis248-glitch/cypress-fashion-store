@@ -117,17 +117,21 @@ async function publishProductToChannel(product) {
   const channel = String(process.env.TELEGRAM_CHANNEL_USERNAME || '@cypress1111').trim();
   const bot = String(process.env.STORE_BOT_USERNAME || 'Cypress11_bot').replace(/^@/, '').trim();
   if (!channel || !bot) throw Error('Telegram channel or bot username is missing.');
-  const saleType = product.sale_type === 'in_stock' ? 'IN STOCK / 现货' : 'PRE-ORDER / 预售';
   const specs = [product.colors?.length ? `Colors: ${product.colors.join(', ')}` : '', product.sizes?.length ? `Sizes: ${product.sizes.join(', ')}` : ''].filter(Boolean).join('\n');
-  const delivery = product.sale_type === 'in_stock' ? 'Delivery: 3–4 days · Pickup: next workday' : 'Pre-order: 15–18 days';
+  const preorder = productPrice(product, 'preorder');
+  const instock = productPrice(product, 'in_stock');
+  const pricing = [
+    `Pre-order: $${preorder.toFixed(2)}`,
+    `In Stock: $${instock.toFixed(2)}`,
+    'Pre-order Delivery: 15–18 days',
+    'In Stock Delivery: 3–4 days'
+  ].join('\n');
   const caption = [
     '🛍 New product / ផលិតផលថ្មី',
     product.name_en,
     product.name_km,
-    `💵 $${Number(product.price).toFixed(2)}`,
-    saleType,
+    pricing,
     specs,
-    delivery,
     product.description_en
   ].filter(Boolean).join('\n').slice(0, 1024);
   await telegramApi('sendPhoto', {
@@ -205,10 +209,19 @@ async function detailPageImages(input) {
 function productInput(input) { const name_en = String(input.name_en || '').trim(), price = Number(input.price), category = ['clothes', 'bags', 'charms'].includes(input.category) ? input.category : 'clothes', requestedSizes = Array.isArray(input.sizes) ? input.sizes : String(input.sizes || '').split(','), requestedColors = Array.isArray(input.colors) ? input.colors : String(input.colors || '').split(','), sizes = category === 'clothes' ? requestedSizes.map(size => String(size).trim()).filter(Boolean).slice(0, 20) : [], colors = requestedColors.map(color => String(color).trim()).filter(Boolean).slice(0, 30); if (!name_en || !Number.isFinite(price) || price < 0) throw Error('Product name and price are required.'); return { name_en, name_km: String(input.name_km || '').trim(), description_en: String(input.description_en || '').trim(), description_km: String(input.description_km || '').trim(), category, price, sizes, colors, size_guides: cleanSizeGuides(input.size_guides, sizes), color_images: keptColorImages(input.color_images, colors), excludes_charms: category === 'bags' && input.excludes_charms === true, published: input.published !== false, featured: input.featured === true }; }
 
 function inventoryKey(item) { const color = String(item?.color || '').trim(), size = String(item?.size || '').trim(); return [color && `color:${color}`, size && `size:${size}`].filter(Boolean).join('|') || 'default'; }
+function priceValue(value) { const number = Number(value); return Number.isFinite(number) && number >= 0 ? Math.round(number * 100) / 100 : null; }
+function suggestedPreorderPrice(cost) { const number = priceValue(cost); return number === null ? null : Math.max(.99, Math.round((Math.floor(number * 1.5 + 3) - .01) * 100) / 100); }
+function productPrice(product, saleType = 'preorder') { const preferred = saleType === 'in_stock' ? priceValue(product?.instock_price) : priceValue(product?.preorder_price); return preferred === null ? Number(product?.price || 0) : preferred; }
 function cleanStock(value) { const stock = plainObject(value); return Object.fromEntries(Object.entries(stock).map(([key, count]) => [String(key).slice(0, 120), Math.max(0, Math.floor(Number(count) || 0))]).filter(([key]) => key)); }
 function cleanVariantSaleTypes(value) { const types = plainObject(value); return Object.fromEntries(Object.entries(types).map(([key, type]) => [String(key).slice(0, 120), type === 'in_stock' ? 'in_stock' : 'preorder']).filter(([key]) => key)); }
 function productVariantSaleType(product, item) { const sku = inventoryKey(item), color = String(item?.color || '').trim(), colorKey = color ? `color:${color}` : ''; return product?.variant_sale_types?.[sku] || (colorKey && product?.variant_sale_types?.[colorKey]) || product?.sale_type || 'preorder'; }
-productInput = function productInputWithInventory(input) { const name_en = String(input.name_en || '').trim(), price = Number(input.price), category = ['clothes', 'bags', 'charms'].includes(input.category) ? input.category : 'clothes', requestedSizes = Array.isArray(input.sizes) ? input.sizes : String(input.sizes || '').split(','), requestedColors = Array.isArray(input.colors) ? input.colors : String(input.colors || '').split(','), sizes = category === 'clothes' ? requestedSizes.map(size => String(size).trim()).filter(Boolean).slice(0, 20) : [], colors = requestedColors.map(color => String(color).trim()).filter(Boolean).slice(0, 30), variant_sale_types = cleanVariantSaleTypes(input.variant_sale_types), sale_type = Object.values(variant_sale_types).includes('in_stock') || input.sale_type === 'in_stock' ? 'in_stock' : 'preorder'; if (!name_en || !Number.isFinite(price) || price < 0) throw Error('Product name and price are required.'); return { name_en, name_km: String(input.name_km || '').trim(), description_en: String(input.description_en || '').trim(), description_km: String(input.description_km || '').trim(), category, price, sizes, colors, size_guides: cleanSizeGuides(input.size_guides, sizes), color_images: keptColorImages(input.color_images, colors), sale_type, variant_sale_types, stock_by_sku: cleanStock(input.stock_by_sku), delivery_notes: cleanDeliveryNotes(input.delivery_notes), excludes_charms: input.excludes_charms === true, published: input.published !== false, featured: input.featured === true }; };
+function orderSaleType(product, item) {
+  // A shopper can choose a price type. Never trust a submitted price, and only
+  // allow In Stock when the order validation below confirms that exact SKU.
+  if (item?.sale_type !== 'in_stock') return 'preorder';
+  return 'in_stock';
+}
+productInput = function productInputWithInventory(input) { const name_en = String(input.name_en || '').trim(), legacyPrice = priceValue(input.price), cost_price = priceValue(input.cost_price), suggested_preorder_price = suggestedPreorderPrice(cost_price), preorder_price = priceValue(input.preorder_price) ?? legacyPrice ?? suggested_preorder_price, instock_price = priceValue(input.instock_price) ?? (preorder_price === null ? null : Math.round((preorder_price + 3) * 100) / 100), category = ['clothes', 'bags', 'charms'].includes(input.category) ? input.category : 'clothes', requestedSizes = Array.isArray(input.sizes) ? input.sizes : String(input.sizes || '').split(','), requestedColors = Array.isArray(input.colors) ? input.colors : String(input.colors || '').split(','), sizes = category === 'clothes' ? requestedSizes.map(size => String(size).trim()).filter(Boolean).slice(0, 20) : [], colors = requestedColors.map(color => String(color).trim()).filter(Boolean).slice(0, 30), variant_sale_types = cleanVariantSaleTypes(input.variant_sale_types), sale_type = Object.values(variant_sale_types).includes('in_stock') || input.sale_type === 'in_stock' ? 'in_stock' : 'preorder', stock_by_sku = cleanStock(input.stock_by_sku), instock_quantity = Math.max(0, Math.floor(Number(input.instock_quantity) || 0)); if (!name_en || preorder_price === null) throw Error('Product name and Pre-order price are required.'); if (!Object.keys(stock_by_sku).length && Number.isFinite(Number(input.instock_quantity))) stock_by_sku.default = instock_quantity; return { name_en, name_km: String(input.name_km || '').trim(), description_en: String(input.description_en || '').trim(), description_km: String(input.description_km || '').trim(), category, price: preorder_price, cost_price, preorder_price, instock_price, instock_quantity, sizes, colors, size_guides: cleanSizeGuides(input.size_guides, sizes), color_images: keptColorImages(input.color_images, colors), sale_type, variant_sale_types, stock_by_sku, delivery_notes: cleanDeliveryNotes(input.delivery_notes), excludes_charms: input.excludes_charms === true, published: input.published !== false, featured: input.featured === true }; };
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -228,13 +241,18 @@ const server = createServer(async (req, res) => {
       if (!telegramUser && !webOrder) return sendJson(res, 401, { error: 'Telegram verification failed.' });
       if (!Array.isArray(input.items) || !input.items.length) return sendJson(res, 400, { error: 'Invalid order.' });
       const productIds = [...new Set(input.items.map(item => String(item.id || '')).filter(id => /^[\w-]+$/.test(id)))];
-      const products = await db(`products?select=id,name_en,price,sale_type,variant_sale_types,stock_by_sku,published&id=in.(${productIds.join(',')})`);
+      const products = await db(`products?select=id,name_en,price,preorder_price,instock_price,instock_quantity,sale_type,variant_sale_types,stock_by_sku,published&id=in.(${productIds.join(',')})`);
       if (!products?.length || products.length !== productIds.length || products.some(product => !product.published)) return sendJson(res, 400, { error: 'A product is no longer available.' });
       const productMap = new Map(products.map(product => [product.id, product]));
       const items = input.items.map(item => {
         const product = productMap.get(String(item.id)), quantity = Math.max(1, Math.floor(Number(item.quantity) || 0)), sku = inventoryKey(item);
         if (!product || !quantity) throw Error('Invalid order item.');
-        return { id: product.id, name: product.name_en, size: String(item.size || ''), color: String(item.color || ''), sku, quantity, price: Number(product.price), sale_type: productVariantSaleType(product, item) };
+        const sale_type = orderSaleType(product, item);
+        if (sale_type === 'in_stock') {
+          const stock = cleanStock(product.stock_by_sku), available = Object.prototype.hasOwnProperty.call(stock, sku) ? stock[sku] : (stock.default ?? Math.max(0, Math.floor(Number(product.instock_quantity) || 0)));
+          if (quantity > available) throw Error(`Only ${available} item(s) are available in stock.`);
+        }
+        return { id: product.id, name: product.name_en, size: String(item.size || ''), color: String(item.color || ''), sku, quantity, price: productPrice(product, sale_type), sale_type };
       });
       const subtotal = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
       const settings = (await db('store_settings?select=shipping,free_shipping_threshold&id=eq.1'))?.[0] || defaults;
