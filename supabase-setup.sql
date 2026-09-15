@@ -25,7 +25,7 @@ create table if not exists public.products (
   name_km text not null default '',
   description_en text not null default '',
   description_km text not null default '',
-  category text not null check (category in ('clothes', 'bags', 'charms')),
+  category text not null check (category in ('clothes', 'bags', 'shoes', 'charms')),
   price numeric(10,2) not null check (price >= 0),
   sizes text[] not null default '{}',
   size_guides jsonb not null default '{}'::jsonb,
