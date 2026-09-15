@@ -11,7 +11,13 @@
     const fromUrl = queryKeys.map(key => query.get(key)).find(Boolean);
     const raw = String(fromUrl || window.Telegram?.WebApp?.initDataUnsafe?.start_param || '').trim();
     const match = productIdPattern.exec(raw);
-    return match ? { id: match[1], signature: `product_${match[1]}` } : null;
+    if (!match) return null;
+    const entry = { id: match[1], signature: `product_${match[1]}` };
+    // Telegram can retain its original start_param for the whole lifetime of a
+    // reused Mini App. Once that exact entry has been dismissed or the shopper
+    // opens a different card inside the store, it is stale—not a new request.
+    // A different product signature remains a valid fresh Channel click.
+    return !fromUrl && state.ignoredTelegramDeepLink === entry.signature ? null : entry;
   };
 
   const homeUrl = () => {
