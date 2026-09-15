@@ -1,44 +1,92 @@
-// Product-specific Telegram Mini App deep links.
-function telegramProductLinkId(){
-  const query=new URLSearchParams(location.search);
-  const raw=String(window.Telegram?.WebApp?.initDataUnsafe?.start_param||query.get('tgWebAppStartParam')||query.get('startapp')||query.get('product')||'').trim();
-  const match=/^(?:product_|p_)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(raw);
-  return match?match[1]:'';
-}
-function continueShoppingFromDeepLink(){
-  if(typeof window.returnFromProduct==='function')return window.returnFromProduct();
-  state.deepLinkProductId='';state.deepLinkEntry=false;state.productBackTarget='home';showShop();
-}
-function unavailableProductPage(){return `<section class="panel unavailable-product"><h2>This product is currently unavailable.</h2><p>该商品目前不可购买。您可以继续浏览商城中的其他商品。</p><button class="primary" onclick="continueShoppingFromDeepLink()">Continue Shopping / 继续逛商城</button></section>`}
-window.applyTelegramProductLink=function applyTelegramProductLink(){
-  const id=telegramProductLinkId();
-  if(!id)return;
-  // The scripts can see the URL before /api/store has finished. Re-run when
-  // store data arrives instead of treating that short loading window as an
-  // unavailable product.
-  if(state.deepLinkApplied){
-    if(state.products?.some(product=>product.id===id))state.deepLinkPending=false;
-    else if(Array.isArray(state.products)&&state.products.length)state.deepLinkPending=false;
-    state.productId=id;state.view='detail';
-    return;
-  }
-  // A Telegram product link starts inside the Mini App, not inside the shop's
-  // history. Keep an explicit internal fallback so our back UI never delegates
-  // to Telegram / the browser history.
-  state.deepLinkApplied=true;state.deepLinkProductId=id;state.deepLinkEntry=true;state.deepLinkPending=!state.products?.some(product=>product.id===id);state.productBackTarget='home';state.productId=id;state.view='detail';
-  try{history.replaceState({...history.state,cypressProduct:id},'',`${location.pathname}?product=${encodeURIComponent(id)}`)}catch{}
-};
+// Telegram product links are an external entry point, so they always take
+// priority over the remembered in-shop route for this webview session.
+(() => {
+  const productIdPattern = /^(?:product_|p_)?([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+  const queryKeys = ['tgWebAppStartParam', 'startapp', 'product'];
 
-setTimeout(()=>{
-  const baseProductDetail=productDetail,baseShowProduct=showProduct;
-  productDetail=()=>{
-    const product=state.products.find(item=>item.id===state.productId);
-    if(!product&&state.deepLinkEntry)return unavailableProductPage();
-    const html=String(baseProductDetail());
-    return state.deepLinkEntry?html.replace(t('backToShop'),'← Continue Shopping'):html;
+  const request = () => {
+    const query = new URLSearchParams(location.search);
+    // Prefer the current URL. Telegram can reuse a Mini App webview, while
+    // initDataUnsafe may still momentarily contain the previous start param.
+    const fromUrl = queryKeys.map(key => query.get(key)).find(Boolean);
+    const raw = String(fromUrl || window.Telegram?.WebApp?.initDataUnsafe?.start_param || '').trim();
+    const match = productIdPattern.exec(raw);
+    return match ? { id: match[1], signature: `product_${match[1]}` } : null;
   };
-  showProduct=id=>{state.deepLinkEntry=false;state.deepLinkProductId='';state.productBackTarget='';baseShowProduct(id)};
-  // The first data response may have completed before this script loaded.
-  window.applyTelegramProductLink();
-  if(state.deepLinkEntry){state.view='detail';render();}
-},0);
+
+  const homeUrl = () => {
+    const url = new URL(location.href);
+    queryKeys.forEach(key => url.searchParams.delete(key));
+    return `${url.pathname}${url.search}${url.hash}`;
+  };
+  const productUrl = id => `${homeUrl()}${homeUrl().includes('?') ? '&' : '?'}product=${encodeURIComponent(id)}`;
+  const fallbackHomeSnapshot = () => ({ view: 'shop', category: 'all', productId: null, scrollY: 0, forms: {}, selectedVariants: {} });
+
+  const replaceWithHomeState = () => {
+    try { history.replaceState({ ...(history.state || {}), cypressTelegramHome: true }, '', homeUrl()); } catch {}
+  };
+  const establishInternalHistory = id => {
+    try {
+      history.replaceState({ ...(history.state || {}), cypressTelegramHome: true }, '', homeUrl());
+      history.pushState({ cypressTelegramProduct: true, cypressProduct: id }, '', productUrl(id));
+    } catch {}
+  };
+
+  const finishAtHome = () => {
+    const active = state.deepLinkSignature || state.deepLinkProductId || '';
+    state.ignoredTelegramDeepLink = active;
+    state.deepLinkEntry = false; state.deepLinkPending = false; state.deepLinkProductId = '';
+    state.deepLinkSignature = ''; state.productBackTarget = ''; state.category = 'all';
+    state.pageTrail = [];
+    replaceWithHomeState();
+    showShop();
+  };
+
+  window.returnFromTelegramProduct = () => {
+    if (!state.deepLinkEntry && state.productBackTarget !== 'home') return false;
+    finishAtHome();
+    return true;
+  };
+
+  const openTelegramProduct = entry => {
+    if (!entry) return false;
+    const alreadyOpen = state.deepLinkEntry && state.deepLinkSignature === entry.signature && state.view === 'detail' && state.productId === entry.id;
+    if (alreadyOpen) {
+      if (state.products?.some(product => product.id === entry.id)) state.deepLinkPending = false;
+      else if (Array.isArray(state.products) && state.products.length) state.deepLinkPending = false;
+      return true;
+    }
+    // A new channel click must replace any remembered home/product state.
+    if (state.ignoredTelegramDeepLink === entry.signature && state.view !== 'detail') return false;
+    state.deepLinkApplied = true; state.deepLinkEntry = true; state.deepLinkPending = !state.products?.some(product => product.id === entry.id);
+    state.deepLinkProductId = entry.id; state.deepLinkSignature = entry.signature; state.productBackTarget = 'home';
+    state.productId = entry.id; state.category = 'all'; state.view = 'detail';
+    // Make the Telegram BackButton an internal back action too. The product
+    // handler still wins over this fallback snapshot when it resolves return.
+    state.pageTrail = [fallbackHomeSnapshot()];
+    establishInternalHistory(entry.id);
+    render();
+    window.Telegram?.WebApp?.BackButton?.show?.();
+    return true;
+  };
+
+  window.applyTelegramProductLink = () => openTelegramProduct(request());
+
+  // Telegram may resume an existing Mini App instance for another channel
+  // click. Recheck on every useful resume signal, plus a light visible-only
+  // polling fallback for clients that do not surface an explicit event.
+  const checkForNewEntry = () => window.applyTelegramProductLink();
+  window.addEventListener('focus', checkForNewEntry);
+  window.addEventListener('pageshow', checkForNewEntry);
+  window.addEventListener('visibilitychange', () => { if (!document.hidden) checkForNewEntry(); });
+  window.addEventListener('hashchange', checkForNewEntry);
+  window.addEventListener('popstate', event => {
+    if (event.state?.cypressTelegramHome && (state.deepLinkEntry || state.productBackTarget === 'home')) finishAtHome();
+    else if (event.state?.cypressTelegramProduct && event.state?.cypressProduct) openTelegramProduct({ id: event.state.cypressProduct, signature: `product_${event.state.cypressProduct}` });
+  });
+  window.Telegram?.WebApp?.onEvent?.('activated', checkForNewEntry);
+  window.Telegram?.WebApp?.onEvent?.('viewportChanged', checkForNewEntry);
+  window.setInterval(() => { if (!document.hidden) checkForNewEntry(); }, 900);
+
+  setTimeout(checkForNewEntry, 0);
+})();
