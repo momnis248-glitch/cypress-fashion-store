@@ -10,6 +10,7 @@ const defaults = {
   new_arrival_en: 'New arrival', new_arrival_km: 'ទំនិញថ្មី',
   hero_text_en: 'Curated clothing and bags. Prices are in USD. Delivery or pickup available.',
   hero_text_km: 'សម្លៀកបំពាក់ និងកាបូបដែលបានជ្រើសរើស។ តម្លៃគិតជា USD។ មានដឹកជញ្ជូន ឬមកយកផ្ទាល់។',
+  banners: [],
   default_delivery_notes: {
     en: 'Pre-order: Delivery in 15–18 days after placing the order.\nIn Stock – Delivery: Delivery in 3–4 days.\nSelf-Pickup: Available after work the next day.\nPickup Location: Security Room at T20 Factory.',
     km: 'ទំនិញបញ្ជាទិញមុន (Pre-order): ទទួលបានទំនិញក្នុងរយៈពេល 15–18 ថ្ងៃ បន្ទាប់ពីធ្វើការបញ្ជាទិញ។\nទំនិញមានស្តុក – ដឹកជញ្ជូន: ទទួលបានទំនិញក្នុងរយៈពេល 3–4 ថ្ងៃ។\nមកយកដោយខ្លួនឯង: អាចមកយកបានបន្ទាប់ពីចេញពីធ្វើការនៅថ្ងៃបន្ទាប់។\nទីតាំងមកយក: បន្ទប់សន្តិសុខនៅរោងចក្រ T20។'
@@ -176,6 +177,21 @@ async function uploadProductVideo(dataUrl) {
 }
 function plainObject(value) { return value && typeof value === 'object' && !Array.isArray(value) ? value : {}; }
 function cleanDeliveryNotes(value) { const notes = plainObject(value); return { en: String(notes.en || '').trim().slice(0, 1600), km: String(notes.km || '').trim().slice(0, 1600) }; }
+async function cleanBanners(value, current = []) {
+  const source = Array.isArray(value) ? value : Array.isArray(current) ? current : [];
+  const banners = [];
+  for (const entry of source.slice(0, 3)) {
+    const item = plainObject(entry);
+    const imageUrl = item.image_data ? await uploadProductImage(String(item.image_data)) : String(item.image_url || '').trim().slice(0, 2000);
+    if (!imageUrl) continue;
+    const link = String(item.link || '').trim().slice(0, 500);
+    // Keep stored actions intentionally small and safe: internal product/category
+    // links, or normal HTTPS campaign links.
+    const safeLink = /^(product|category):[\w-]+$/i.test(link) || /^https:\/\//i.test(link) ? link : '';
+    banners.push({ id: String(item.id || randomUUID()), image_url: imageUrl, enabled: item.enabled !== false, link: safeLink, sort: banners.length });
+  }
+  return banners;
+}
 function cleanSizeGuides(value, sizes) {
   const guides = plainObject(value);
   return Object.fromEntries(sizes.map(size => {
@@ -335,6 +351,9 @@ const server = createServer(async (req, res) => {
         new_arrival_km: text('new_arrival_km'),
         default_delivery_notes: cleanDeliveryNotes(input.default_delivery_notes ?? current.default_delivery_notes ?? defaults.default_delivery_notes)
       };
+      // Keep existing Home settings usable until the one-time banner migration
+      // has been run. Banner saves themselves then use the new JSONB column.
+      if (Object.prototype.hasOwnProperty.call(input, 'banners') || current.banners !== undefined) settings.banners = await cleanBanners(input.banners, current.banners ?? defaults.banners);
       if (!settings.pickup) return sendJson(res, 400, { error: 'Pickup address is required.' });
       const saved = await db('store_settings?id=eq.1', { method: 'PATCH', headers: { 'content-type': 'application/json', prefer: 'return=representation' }, body: JSON.stringify(settings) });
       return sendJson(res, 200, saved?.[0] || { ...current, ...settings });
