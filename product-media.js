@@ -255,7 +255,7 @@
     // One fixed policy is used in every customer entry point. The server repeats
     // this same calculation before an order is saved.
     cleanCheckout = freeDeliveryCheckout;
-    shop = () => {
+    if (!window.homeBannerShop) shop = () => {
       const home = baseShop(), channel = typeof channelButton === 'function' ? channelButton() : '';
       const banner = `<div class="store-free-delivery">${freeDeliveryCopy().policy}</div>`;
       // Put the policy beside the shopping actions, immediately under the
